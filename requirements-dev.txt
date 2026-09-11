@@ -1,0 +1,8 @@
+# Development tools: tests, linting, dependency vulnerability audit.
+# Analysis results depend only on requirements.txt, which is fully pinned.
+# Audit: python -m pip_audit --ignore-vuln PYSEC-2026-3625
+# (accepted risk; the reason sits next to the msgpack pin in requirements.txt)
+-r requirements.txt
+pytest==9.1.1
+ruff==0.16.7
+pip-audit==2.10.1
