@@ -46,6 +46,13 @@ rather than claiming a match.
   Hungary (14 race stints across three years, none longer than 17 laps), so
   there is too little data to model it.
 
+## Decisions
+
+The main choices in this project, the reasoning behind them, and the options
+that were rejected, are written up in [docs/decisions.md](docs/decisions.md).
+That includes the pilot circuit, which was changed after the data contradicted
+the first pick.
+
 ## Setup
 
 Requires Python 3.11.
