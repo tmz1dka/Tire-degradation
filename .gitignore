@@ -18,4 +18,5 @@ cache/
 
 # OS / editor
 .DS_Store
+.Rhistory
 .vscode/
