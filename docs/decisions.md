@@ -414,3 +414,38 @@ much. And the two oldest buckets hold 43 and 10 laps, and only stints that were
 going well last that long, so this is weak evidence either way.
 
 **Reproduce.** `python scripts/compare_forms.py`.
+
+## 12. Keeping up with a data source that closed
+
+**Decision.** Pin FastF1 to 3.9.0, read credentials from the environment, and
+fail with a message naming the cause when a race cannot be loaded.
+
+**Why.** Formula 1 put its timing archive behind a login in late 2026. The
+endpoint this project had been reading now answers with HTTP 401, and FastF1
+3.8.3, the version pinned until now, has no way to sign in. On that version the
+project could no longer fetch a single new race.
+
+FastF1 3.9.0 can sign in with a free F1 account using the F1_USERNAME and
+F1_PASSWORD environment variables. Before pinning it, every published number was
+regenerated from the existing cache under 3.9.0 and all of them matched exactly,
+so the upgrade changes nothing about the results.
+
+The failure mode mattered as much as the fix. FastF1 logs a warning and carries
+on when a download fails, so the first thing to touch the laps raised an error
+with no connection to the real cause. Loading now checks that laps arrived and
+raises one message explaining that the archive needs an account.
+
+**Not chosen.**
+- *Stay on 3.8.3.* The cache still works, so the analysis would still run, but
+  nobody could ever add a race. A pinned version that cannot fetch data is a
+  dead end.
+- *Commit the cache so the data is always there.* It is 163 MB of someone else's
+  data, and a repository is not a data store.
+- *Store credentials in the repository.* Never. They stay in the environment,
+  and `.env` is ignored.
+
+**Cost accepted.** Reproducing this project from scratch now depends on a free
+account with a third party that has already changed the rules once. Anyone with
+the cache is unaffected, and the tests never needed the data at all: they build
+their own lap times, so they pass on a fresh clone with no account, no network
+and no cache.

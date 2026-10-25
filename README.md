@@ -130,6 +130,10 @@ What this project could not remove, and which way each one pushes.
 - **Track temperature is not in the fitted model.** Within a race it moves
   almost in step with fuel burn, so including it on this data would have made
   the two impossible to separate.
+- **The data source now requires an account.** Formula 1 closed public access to
+  its timing archive in late 2026. The analysis is unaffected once a race is
+  cached, but reproducing it from scratch needs a free F1 account, which is a
+  dependency on a third party that could change again.
 
 **Status.** The pipeline, the fuel correction, the degradation model, the
 strategy comparison and the test of curved degradation shapes are all built and
@@ -185,3 +189,20 @@ Run the tests, and regenerate every figure and number quoted above:
 
 FastF1 caches downloaded sessions in `cache/` (gitignored), so each race is
 downloaded once.
+
+### Getting the data
+
+Formula 1 put its timing archive behind a login in late 2026. FastF1 3.9 can
+sign in with a free F1 account, so the first run needs credentials in the
+environment:
+
+```bash
+export F1_USERNAME="your F1 account email"
+export F1_PASSWORD="your F1 account password"
+```
+
+Put them in the environment or a local `.env`, never in the repository. After
+the first run the data is cached and the credentials are no longer needed.
+
+The tests do not need any of this. They build their own lap data, so
+`pytest` passes on a fresh clone with no account, no network and no cache.

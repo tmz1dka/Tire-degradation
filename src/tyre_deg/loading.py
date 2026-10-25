@@ -13,6 +13,7 @@ from pathlib import Path
 
 import fastf1
 import pandas as pd
+from fastf1.exceptions import DataNotLoadedError
 
 from tyre_deg.config import CACHE_DIR, MODELLING_SEASONS, RACE_COLUMN
 
@@ -44,6 +45,56 @@ def _warn_if_outside_modelling_window(year: int) -> None:
         )
 
 
+def _require_laps(
+    session: fastf1.core.Session,
+    year: int,
+    circuit: str,
+    cache_dir: Path,
+) -> None:
+    """Fail clearly when a session loaded without any lap data.
+
+    FastF1 logs a warning and carries on when a download fails, so the next
+    thing to touch the laps raises an error far from the real cause. This turns
+    that into one message naming the likely reason.
+
+    Args:
+        session: A session that load() has been called on.
+        year: Season, for the error message.
+        circuit: Circuit, for the error message.
+        cache_dir: Cache directory, for the error message.
+
+    Raises:
+        RuntimeError: If the session has no laps.
+    """
+    try:
+        laps = session.laps
+    except DataNotLoadedError as error:
+        raise RuntimeError(_no_laps_message(year, circuit, cache_dir)) from error
+    if laps.empty:
+        raise RuntimeError(_no_laps_message(year, circuit, cache_dir))
+
+
+def _no_laps_message(year: int, circuit: str, cache_dir: Path) -> str:
+    """Explain why a race has no laps and what to do about it.
+
+    Args:
+        year: Season.
+        circuit: Circuit name.
+        cache_dir: Cache directory that was searched.
+
+    Returns:
+        The error message.
+    """
+    return (
+        f"No lap data for the {year} race at {circuit!r}. It was not in the "
+        f"cache at {cache_dir} and could not be downloaded; FastF1 logs the "
+        "reason as a warning above. Formula 1 now requires an account to read "
+        "the timing archive, so set the F1_USERNAME and F1_PASSWORD environment "
+        "variables, or point the cache at a directory that already holds this "
+        "race."
+    )
+
+
 def load_race(
     year: int,
     circuit: str,
@@ -64,6 +115,8 @@ def load_race(
 
     Raises:
         ValueError: If the season or circuit does not resolve to a race session.
+        RuntimeError: If the session loads with no lap data, which usually
+            means the download failed.
     """
     enable_cache(cache_dir)
     _warn_if_outside_modelling_window(year)
@@ -75,6 +128,7 @@ def load_race(
             f"Could not load the {year} race at {circuit!r} from "
             f"cache {cache_dir}: {error}"
         ) from error
+    _require_laps(session, year, circuit, cache_dir)
     logger.info(
         "Loaded %s %s: %d laps from %d drivers",
         year,
