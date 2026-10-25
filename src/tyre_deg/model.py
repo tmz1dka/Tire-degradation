@@ -52,6 +52,11 @@ logger = logging.getLogger(__name__)
 
 FUEL_TERM = "fuel_per_lap_remaining"
 PACE_PREFIX = "pace_"
+
+
+def is_pace_term(name: str) -> bool:
+    """Whether a design column is a driver and race baseline."""
+    return name.startswith(PACE_PREFIX)
 STINT_KEY_COLUMNS = (RACE_COLUMN, "Driver", "Stint")
 
 
@@ -100,6 +105,60 @@ def _require_columns(laps: pd.DataFrame, columns: Sequence[str]) -> None:
     missing = set(columns) - set(laps.columns)
     if missing:
         raise KeyError(f"lap frame is missing columns {sorted(missing)}")
+
+
+@dataclass(frozen=True)
+class ModelForm:
+    """How degradation is allowed to vary with tyre age.
+
+    A straight line charges the same amount for the fortieth lap of a stint as
+    for the first. Real tyres often drop quickly and then settle, so these
+    richer shapes exist to be tested against the straight line rather than
+    assumed to be better.
+
+    Attributes:
+        name: Label for reporting.
+        quadratic: Add an age squared term, letting the rate speed up or ease
+            off smoothly with age.
+        knee_lap: Add a term that only switches on past this tyre age, letting
+            the rate change once at a known point.
+    """
+
+    name: str
+    quadratic: bool = False
+    knee_lap: float | None = None
+
+    def age_terms(self, ages: pd.Series) -> dict[str, pd.Series]:
+        """Return the age based columns this form needs.
+
+        Args:
+            ages: Tyre age in laps.
+
+        Returns:
+            Column suffix to values, always including the linear term.
+        """
+        terms = {"age": ages}
+        if self.quadratic:
+            terms["age2"] = ages**2
+        if self.knee_lap is not None:
+            terms[f"past{self.knee_lap:g}"] = (ages - self.knee_lap).clip(lower=0.0)
+        return terms
+
+
+LINEAR = ModelForm("linear")
+QUADRATIC = ModelForm("quadratic", quadratic=True)
+
+
+def hinge_form(knee_lap: float) -> ModelForm:
+    """Return a form whose degradation rate changes once, at ``knee_lap``.
+
+    Args:
+        knee_lap: Tyre age at which the rate is allowed to change.
+
+    Returns:
+        The model form.
+    """
+    return ModelForm(f"hinge at {knee_lap:g}", knee_lap=knee_lap)
 
 
 def pace_keys(laps: pd.DataFrame) -> pd.Series:
@@ -171,6 +230,7 @@ def build_design(
     laps: pd.DataFrame,
     compounds: Sequence[str] = MODELLED_COMPOUNDS,
     reference_compound: str = REFERENCE_COMPOUND,
+    form: ModelForm = LINEAR,
 ) -> tuple[pd.DataFrame, pd.Series]:
     """Build the design matrix and the lap times it explains.
 
@@ -178,6 +238,7 @@ def build_design(
         laps: Clean laps, already restricted to the compounds of interest.
         compounds: Compounds to fit a degradation slope for.
         reference_compound: Compound the baseline offsets are measured against.
+        form: How degradation may vary with tyre age.
 
     Returns:
         The design matrix and the lap times, aligned.
@@ -196,9 +257,11 @@ def build_design(
         dtype=float,
     )
     design[FUEL_TERM] = laps_of_fuel_remaining_by_race(used).astype(float)
+    ages = used["TyreLife"].astype(float)
     for compound in compounds:
         is_compound = (used["Compound"] == compound).astype(float)
-        design[f"age_{compound}"] = is_compound * used["TyreLife"].astype(float)
+        for suffix, values in form.age_terms(ages).items():
+            design[f"{suffix}_{compound}"] = is_compound * values
         if compound != reference_compound:
             design[f"offset_{compound}"] = is_compound
     return design, used["lap_time_s"].astype(float)

@@ -354,3 +354,63 @@ stop manages the tyre, and a straight line charges full price for every lap of a
 long stint. Both make the one stop look worse than it was.
 
 **Reproduce.** `python scripts/strategy_test.py`.
+
+## 11. Degradation stays a straight line
+
+**Decision.** Keep degradation linear in tyre age. A quadratic and a range of
+hinge shapes were tested against held-out races and none earned its place.
+
+**Why.** Section 7 said a curve would be tested rather than assumed. Each shape
+was scored by leaving one training race out, fitting on the other and measuring
+the error on the race it had not seen. Only the shape is scored, not absolute
+pace: the model fits an intercept per driver per race, so it cannot predict a
+race it has never seen, and each driver's own mean error inside the held-out
+race is removed first. That is also the part that matters, because intercepts
+cancel when two strategies are compared.
+
+| Shape | Extra terms per compound | Held-out error |
+|---|---|---|
+| quadratic | 1 | 0.6812 s |
+| hinge at 15 | 1 | 0.6821 s |
+| linear | 0 | 0.6824 s |
+| hinge at 20 | 1 | 0.6827 s |
+| hinge at 10 | 1 | 0.6846 s |
+| hinge at 25 | 1 | 0.6876 s |
+
+The best shape beats the straight line by 0.0012 s, which is 0.2% of its error,
+and three of the five curved shapes are worse than it. With two training races
+there are only two folds, so a gap that small is not evidence of anything.
+
+**Not chosen.**
+- *Adopt the quadratic because it scored best.* 0.2% on two folds is noise, and
+  it costs a parameter per compound. Picking the winner of a close race between
+  six shapes is how a model gets fitted to its own validation set.
+- *Choose the shape on the 2025 race.* That would spend the held-out season on
+  model selection and the strategy result would no longer be out of sample.
+  See section 8.
+- *Fit the knee position freely.* Another parameter chosen from the same two
+  folds, with the same problem.
+
+**Cost accepted.** The straight line is not exactly right, and its errors show
+where it misses. Mean error by tyre age, on the training races:
+
+| Tyre age | Mean error | Laps |
+|---|---|---|
+| 0 to 4 | +0.061 s | 139 |
+| 5 to 9 | +0.081 s | 385 |
+| 10 to 14 | +0.079 s | 425 |
+| 15 to 19 | -0.028 s | 395 |
+| 20 to 24 | -0.130 s | 327 |
+| 25 to 29 | -0.111 s | 212 |
+| 30 to 34 | -0.057 s | 93 |
+| 35 to 39 | +0.167 s | 43 |
+| 40 to 44 | +0.180 s | 10 |
+
+That is a wave rather than a simple curve, which is why a quadratic cannot
+capture it. Two things are worth saying about the direction. The error at high
+tyre age is positive, meaning the straight line predicts lap times faster than
+they really were, so it charges too little for a long stint rather than too
+much. And the two oldest buckets hold 43 and 10 laps, and only stints that were
+going well last that long, so this is weak evidence either way.
+
+**Reproduce.** `python scripts/compare_forms.py`.

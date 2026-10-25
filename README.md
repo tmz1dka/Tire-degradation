@@ -91,11 +91,14 @@ measured mostly from cars not doing that. This is not a flaw that more data
 fixes: how hard a driver pushes is chosen along with the strategy, so the two
 cannot be separated from race data alone.
 
-**A straight line charges full price for every lap.** That 28.6 s assumes the
-hard tyre keeps losing 0.078 s every lap for 39 straight laps. Real tyres often
-drop quickly and then settle. If the curve flattens, the one stop is cheaper
-than the model thinks, and the 9 s shrinks. Testing a curved form against
-held-out races is the obvious next step and the model was built to make it easy.
+**A straight line charges full price for every lap**, which was the third
+explanation until it was tested. If real wear eased off with age, the 28.6 s
+would be overstated and the one stop would be cheaper than the model thinks. A
+quadratic and five hinge shapes were scored against held-out races: the best
+beat the straight line by 0.0012 s, 0.2% of its error, and three were worse. So
+this explanation does not survive. If anything it points the other way, because
+the straight line's errors at high tyre age are positive, meaning it predicts
+long stints as faster than they really were.
 
 So the honest summary is that the model answers a narrower question than "who
 wins": it estimates the pace difference between two strategies in clear air,
@@ -112,8 +115,10 @@ What this project could not remove, and which way each one pushes.
 - **Tyre management is tied to the strategy being judged.** A driver nursing a
   long stint shows less degradation. This biases the cost of long stints upward,
   which means the one stop is probably treated worse than it deserves.
-- **Degradation is modelled as a straight line.** Same direction: linear wear
-  overstates the price of a long stint if the real curve flattens.
+- **Degradation is modelled as a straight line.** Curved shapes were tested on
+  held-out races and none improved on it by more than 0.2%, so the line stays.
+  Its errors do show a pattern it cannot capture, strongest at tyre ages the
+  data barely covers.
 - **Track position is not modelled at all.** At this circuit that is the
   difference between a faster strategy and a winning one.
 - **Two training races.** Only two cross-validation folds are available inside
@@ -126,9 +131,10 @@ What this project could not remove, and which way each one pushes.
   almost in step with fuel burn, so including it on this data would have made
   the two impossible to separate.
 
-**Status.** The pipeline, the fuel correction, the degradation model and the
-strategy comparison are built and tested. The next step is testing a curved
-degradation form against held-out races, which the limitations above point to.
+**Status.** The pipeline, the fuel correction, the degradation model, the
+strategy comparison and the test of curved degradation shapes are all built and
+tested. What remains unresolved is track position, which lap time modelling
+alone cannot reach.
 
 ## Approach
 
@@ -174,6 +180,7 @@ Run the tests, and regenerate every figure and number quoted above:
 .venv/bin/python scripts/plot_fuel_correction.py
 .venv/bin/python scripts/fit_model.py
 .venv/bin/python scripts/strategy_test.py
+.venv/bin/python scripts/compare_forms.py
 ```
 
 FastF1 caches downloaded sessions in `cache/` (gitignored), so each race is

@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-import numpy as np
 import pandas as pd
 import pytest
+from tests.conftest import RaceFactory, Truth
 
 from tyre_deg.model import (
     CoefficientInterval,
@@ -22,88 +22,25 @@ from tyre_deg.model import (
     stint_positions,
 )
 
-TOTAL_LAPS = 70
-FUEL = 0.045
-DEGRADATION = {"MEDIUM": 0.05, "HARD": 0.07}
-OFFSETS = {"MEDIUM": -0.40, "HARD": 0.0}
-PACE = {"VER": 80.0, "NOR": 80.3, "PIA": 80.5, "RUS": 80.8, "LEC": 81.0, "HAM": 81.2}
-
-
-def build_laps(
-    race_id: str,
-    stints: list[tuple[str, int, str, int, int]],
-    noise_std: float = 0.0,
-    seed: int = 0,
-) -> pd.DataFrame:
-    """Build laps whose times contain known pace, fuel and degradation terms.
-
-    Args:
-        race_id: Race identifier.
-        stints: Tuples of driver, stint number, compound, first lap, length.
-        noise_std: Standard deviation of optional seeded noise, in seconds.
-        seed: Seed for that noise.
-
-    Returns:
-        A lap frame with every column the model requires.
-    """
-    generator = np.random.default_rng(seed)
-    rows = []
-    for driver, stint, compound, first_lap, length in stints:
-        for offset in range(length):
-            lap_number = first_lap + offset
-            age = offset + 1
-            rows.append(
-                {
-                    "race_id": race_id,
-                    "Driver": driver,
-                    "Stint": float(stint),
-                    "Compound": compound,
-                    "LapNumber": float(lap_number),
-                    "TyreLife": float(age),
-                    "lap_time_s": (
-                        PACE[driver]
-                        + FUEL * (TOTAL_LAPS - lap_number)
-                        + DEGRADATION[compound] * age
-                        + OFFSETS[compound]
-                    ),
-                }
-            )
-    frame = pd.DataFrame(rows)
-    if noise_std:
-        frame["lap_time_s"] += generator.normal(0.0, noise_std, len(frame))
-    return frame
-
-
-def three_stint_race(race_id: str, stop_shift: int, **kwargs: object) -> pd.DataFrame:
-    """Build a race where every driver runs medium, hard, hard at varied laps."""
-    stints = []
-    for index, driver in enumerate(PACE):
-        first_stop = 18 + stop_shift + index
-        second_stop = first_stop + 24
-        stints.extend(
-            [
-                (driver, 1, "MEDIUM", 1, first_stop - 1),
-                (driver, 2, "HARD", first_stop, second_stop - first_stop),
-                (driver, 3, "HARD", second_stop, TOTAL_LAPS - second_stop + 1),
-            ]
-        )
-    return build_laps(race_id, stints, **kwargs)
-
 
 @pytest.fixture
-def two_races() -> pd.DataFrame:
+def two_races(race_factory: RaceFactory) -> pd.DataFrame:
     """Two races of six drivers running three stints each."""
     return pd.concat(
-        [three_stint_race("2023 Race", 0), three_stint_race("2024 Race", 3)],
+        [
+            race_factory("2023 Race", stop_shift=0),
+            race_factory("2024 Race", stop_shift=3),
+        ],
         ignore_index=True,
     )
 
 
 def test_fit_recovers_the_coefficients_it_was_built_from(
     two_races: pd.DataFrame,
+    truth: Truth,
 ) -> None:
     fit = fit_degradation(two_races)
-    assert fit.fuel_s_per_lap == pytest.approx(FUEL, abs=1e-9)
+    assert fit.fuel_s_per_lap == pytest.approx(truth.fuel, abs=1e-9)
     assert fit.degradation_s_per_lap["MEDIUM"] == pytest.approx(0.05, abs=1e-9)
     assert fit.degradation_s_per_lap["HARD"] == pytest.approx(0.07, abs=1e-9)
 
@@ -115,31 +52,46 @@ def test_fit_recovers_the_compound_baseline_offset(two_races: pd.DataFrame) -> N
     assert fit.reference_compound == "HARD"
 
 
-def test_fit_uses_one_intercept_per_driver_per_race(two_races: pd.DataFrame) -> None:
+def test_fit_uses_one_intercept_per_driver_per_race(
+    two_races: pd.DataFrame,
+    truth: Truth,
+) -> None:
     fit = fit_degradation(two_races)
-    assert fit.intercepts == len(PACE) * 2
+    assert fit.intercepts == len(truth.drivers) * 2
     assert fit.residual_std_s == pytest.approx(0.0, abs=1e-9)
     assert fit.laps == len(two_races)
 
 
-def test_a_single_stint_cannot_separate_fuel_from_tyre_age() -> None:
+def test_a_single_stint_cannot_separate_fuel_from_tyre_age(
+    two_races: pd.DataFrame,
+) -> None:
     # Within one stint, tyre age rises exactly as fuel remaining falls, so the
     # two terms are the same column in disguise. Several stints break the tie.
-    one_stint = build_laps("2023 Race", [("VER", 1, "HARD", 1, 30)])
+    one_stint = two_races[
+        (two_races["Driver"] == "VER")
+        & (two_races["race_id"] == "2023 Race")
+        & (two_races["Stint"] == 2.0)
+    ]
     with pytest.raises(ValueError, match="rank deficient"):
         fit_degradation(one_stint, compounds=["HARD"])
 
 
-def test_two_stints_for_one_driver_are_enough_to_separate_them() -> None:
+def test_two_stints_for_one_driver_are_enough_to_separate_them(
+    two_races: pd.DataFrame,
+    truth: Truth,
+) -> None:
     # The pit stop resets tyre age while fuel keeps falling, which is what makes
     # the two effects identifiable even from a single driver's race.
-    two_stints = build_laps(
-        "2023 Race",
-        [("VER", 1, "HARD", 1, 30), ("VER", 2, "HARD", 31, 40)],
-    )
+    two_stints = two_races[
+        (two_races["Driver"] == "VER")
+        & (two_races["race_id"] == "2023 Race")
+        & (two_races["Stint"] != 1.0)
+    ]
     fit = fit_degradation(two_stints, compounds=["HARD"])
-    assert fit.fuel_s_per_lap == pytest.approx(FUEL, abs=1e-9)
-    assert fit.degradation_s_per_lap["HARD"] == pytest.approx(0.07, abs=1e-9)
+    assert fit.fuel_s_per_lap == pytest.approx(truth.fuel, abs=1e-9)
+    assert fit.degradation_s_per_lap["HARD"] == pytest.approx(
+        truth.degradation["HARD"], abs=1e-9
+    )
 
 
 def test_design_has_one_column_per_term(two_races: pd.DataFrame) -> None:
@@ -163,14 +115,19 @@ def test_design_needs_its_columns() -> None:
         build_design(pd.DataFrame({"lap_time_s": [80.0]}))
 
 
-def test_stint_positions_finds_every_stint(two_races: pd.DataFrame) -> None:
+def test_stint_positions_finds_every_stint(
+    two_races: pd.DataFrame,
+    truth: Truth,
+) -> None:
     positions = stint_positions(two_races)
-    assert len(positions) == len(PACE) * 3 * 2
+    assert len(positions) == len(truth.drivers) * 3 * 2
     assert sum(len(block) for block in positions) == len(two_races)
 
 
-def test_bootstrap_is_reproducible_from_its_seed(two_races: pd.DataFrame) -> None:
-    noisy = three_stint_race("2023 Race", 0, noise_std=0.15, seed=1)
+def test_bootstrap_is_reproducible_from_its_seed(
+    race_factory: RaceFactory,
+) -> None:
+    noisy = race_factory("2023 Race", stop_shift=0, noise_std=0.15, seed=1)
     first = bootstrap_degradation(noisy, resamples=50, seed=7)
     again = bootstrap_degradation(noisy, resamples=50, seed=7)
     different = bootstrap_degradation(noisy, resamples=50, seed=8)
@@ -178,17 +135,20 @@ def test_bootstrap_is_reproducible_from_its_seed(two_races: pd.DataFrame) -> Non
     assert first.fuel != different.fuel
 
 
-def test_bootstrap_intervals_cover_the_true_coefficients() -> None:
+def test_bootstrap_intervals_cover_the_true_coefficients(
+    race_factory: RaceFactory,
+    truth: Truth,
+) -> None:
     noisy = pd.concat(
         [
-            three_stint_race("2023 Race", 0, noise_std=0.15, seed=1),
-            three_stint_race("2024 Race", 3, noise_std=0.15, seed=2),
+            race_factory("2023 Race", stop_shift=0, noise_std=0.15, seed=1),
+            race_factory("2024 Race", stop_shift=3, noise_std=0.15, seed=2),
         ],
         ignore_index=True,
     )
     result = bootstrap_degradation(noisy, resamples=200, seed=3)
-    assert result.fuel.low <= FUEL <= result.fuel.high
-    for compound, true_rate in DEGRADATION.items():
+    assert result.fuel.low <= truth.fuel <= result.fuel.high
+    for compound, true_rate in truth.degradation.items():
         interval = result.degradation[compound]
         assert interval.low <= true_rate <= interval.high
         assert interval.excludes(0.0)
@@ -210,11 +170,14 @@ def test_interval_reports_its_width_and_what_it_excludes() -> None:
     assert interval.excludes(0.05) is False
 
 
-def test_derived_interval_compares_two_coefficients_properly() -> None:
+def test_derived_interval_compares_two_coefficients_properly(
+    race_factory: RaceFactory,
+    truth: Truth,
+) -> None:
     noisy = pd.concat(
         [
-            three_stint_race("2023 Race", 0, noise_std=0.15, seed=1),
-            three_stint_race("2024 Race", 3, noise_std=0.15, seed=2),
+            race_factory("2023 Race", stop_shift=0, noise_std=0.15, seed=1),
+            race_factory("2024 Race", stop_shift=3, noise_std=0.15, seed=2),
         ],
         ignore_index=True,
     )
@@ -224,7 +187,7 @@ def test_derived_interval_compares_two_coefficients_properly() -> None:
         lambda fit: fit.degradation_s_per_lap["HARD"]
         - fit.degradation_s_per_lap["MEDIUM"],
     )
-    true_gap = DEGRADATION["HARD"] - DEGRADATION["MEDIUM"]
+    true_gap = truth.degradation["HARD"] - truth.degradation["MEDIUM"]
     assert gap.low <= true_gap <= gap.high
     assert len(result.draws) == 200
 
