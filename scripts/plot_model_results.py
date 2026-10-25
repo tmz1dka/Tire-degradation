@@ -32,6 +32,7 @@ from tyre_deg.fuel import physical_fuel_effect  # noqa: E402
 from tyre_deg.loading import load_race, race_lap_count, race_laps  # noqa: E402
 from tyre_deg.model import (  # noqa: E402
     BootstrapResult,
+    CoefficientInterval,
     DegradationEstimate,
     bootstrap_degradation,
 )
@@ -53,6 +54,31 @@ COLORS = {
 }
 
 
+def draw_coefficient_row(
+    axis: plt.Axes,
+    position: int,
+    label: str,
+    interval: CoefficientInterval,
+    color: str,
+) -> None:
+    """Draw one coefficient as a labelled interval with its point estimate.
+
+    Args:
+        axis: Axis to draw on.
+        position: Vertical position of the row.
+        label: Row label.
+        interval: The coefficient and its interval.
+        color: Colour for the row.
+    """
+    axis.plot([interval.low, interval.high], [position, position],
+              color=color, linewidth=2.4, solid_capstyle="round", zorder=2)
+    axis.plot([interval.point], [position], "o", color=color, markersize=7,
+              zorder=3)
+    axis.text(interval.high + 0.003, position + 0.17,
+              f"{interval.point:.4f}", fontsize=9, color=color, va="center")
+    axis.text(-0.004, position, label, fontsize=9.5, ha="right", va="center")
+
+
 def draw_coefficients(axis: plt.Axes, result: BootstrapResult, physical: float) -> None:
     """Draw each fitted coefficient with its interval.
 
@@ -68,13 +94,7 @@ def draw_coefficients(axis: plt.Axes, result: BootstrapResult, physical: float) 
         ("hard, per lap of tyre age", result.degradation["HARD"], COLORS["HARD"]),
     ]
     for position, (label, interval, color) in enumerate(reversed(rows)):
-        axis.plot([interval.low, interval.high], [position, position],
-                  color=color, linewidth=2.4, solid_capstyle="round", zorder=2)
-        axis.plot([interval.point], [position], "o", color=color, markersize=7,
-                  zorder=3)
-        axis.text(interval.high + 0.003, position + 0.17,
-                  f"{interval.point:.4f}", fontsize=9, color=color, va="center")
-        axis.text(-0.004, position, label, fontsize=9.5, ha="right", va="center")
+        draw_coefficient_row(axis, position, label, interval, color)
     axis.plot([physical], [2.32], marker="*", markersize=14, color="#009E73",
               zorder=4, linestyle="none",
               label=f"physics says {physical:.4f}, never given to the model")

@@ -103,8 +103,7 @@ def load_race(
 ) -> fastf1.core.Session:
     """Load one race session, with laps, weather and race control messages.
 
-    Telemetry is not loaded: it is large and this project works at lap
-    granularity.
+    Telemetry is not loaded: it is large and this project works per lap.
 
     Args:
         year: Season, for example 2023.
@@ -112,12 +111,11 @@ def load_race(
         cache_dir: Directory holding the FastF1 session cache.
 
     Returns:
-        A loaded FastF1 race session.
+        A loaded race session.
 
     Raises:
-        ValueError: If the season or circuit does not resolve to a race session.
-        RuntimeError: If the session loads with no lap data, which usually
-            means the download failed.
+        ValueError: If the season or circuit does not resolve to a session.
+        RuntimeError: If it loads with no laps, usually a failed download.
     """
     enable_cache(cache_dir)
     _warn_if_outside_modelling_window(year)

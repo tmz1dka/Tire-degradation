@@ -78,6 +78,45 @@ def axis_span(laps: pd.DataFrame, columns: tuple[str, ...]) -> float:
     return max(spans)
 
 
+def draw_compound(
+    axis: plt.Axes,
+    subset: pd.DataFrame,
+    column: str,
+    compound: str,
+) -> LineFit | None:
+    """Draw one compound's laps, its median by tyre age, and its fitted line.
+
+    Args:
+        axis: Axis to draw on.
+        subset: That compound's laps.
+        column: Time column to plot.
+        compound: Compound name, for the colour and the label.
+
+    Returns:
+        The fitted line, or None when there were too few laps to fit one.
+    """
+    color = COMPOUND_COLORS[compound]
+    axis.scatter(
+        subset["TyreLife"], subset[column], s=7, alpha=0.12, color=color,
+        linewidths=0, zorder=1,
+    )
+    medians = median_lap_time_by_tyre_age(subset, column)
+    axis.plot(
+        medians.index, medians.to_numpy(), color=color, linewidth=1.8,
+        marker="o", markersize=3, zorder=3,
+        label=f"{compound.lower()} median by age",
+    )
+    fit = uncontrolled_line(subset["TyreLife"], subset[column])
+    if fit is None:
+        return None
+    ages = np.array([fit.youngest_age, fit.oldest_age])
+    axis.plot(
+        ages, [fit.predict(age) for age in ages], color=color,
+        linewidth=1.6, linestyle="--", zorder=4,
+    )
+    return fit
+
+
 def draw_panel(
     axis: plt.Axes,
     laps: pd.DataFrame,
@@ -102,26 +141,9 @@ def draw_panel(
         subset = laps[laps["Compound"] == compound]
         if subset.empty:
             continue
-        color = COMPOUND_COLORS[compound]
-        axis.scatter(
-            subset["TyreLife"], subset[column], s=7, alpha=0.12, color=color,
-            linewidths=0, zorder=1,
-        )
-        medians = median_lap_time_by_tyre_age(subset, column)
-        axis.plot(
-            medians.index, medians.to_numpy(), color=color, linewidth=1.8,
-            marker="o", markersize=3, zorder=3,
-            label=f"{compound.lower()} median by age",
-        )
-        fit = uncontrolled_line(subset["TyreLife"], subset[column])
-        if fit is None:
-            continue
-        fits[compound] = fit
-        ages = np.array([fit.youngest_age, fit.oldest_age])
-        axis.plot(
-            ages, [fit.predict(age) for age in ages], color=color,
-            linewidth=1.6, linestyle="--", zorder=4,
-        )
+        fit = draw_compound(axis, subset, column, compound)
+        if fit is not None:
+            fits[compound] = fit
     centre = float(laps[column].quantile([0.01, 0.99]).mean())
     axis.set_ylim(centre - span / 2, centre + span / 2)
     axis.set_title(title, fontsize=11, pad=8)

@@ -173,6 +173,37 @@ def pace_keys(laps: pd.DataFrame) -> pd.Series:
     return laps[RACE_COLUMN].astype(str) + " " + laps["Driver"].astype(str)
 
 
+def _check_predictable(
+    laps: pd.DataFrame,
+    keys: pd.Series,
+    races: pd.Series,
+    estimate: DegradationEstimate,
+    race_distance: Mapping[str, int],
+) -> None:
+    """Raise if these laps cannot be predicted from this fit.
+
+    Args:
+        laps: Laps to predict.
+        keys: Their driver and race keys.
+        races: Their race identifiers.
+        estimate: A fitted model.
+        race_distance: Laps in each race.
+
+    Raises:
+        KeyError: If a column, a baseline or a race distance is missing.
+    """
+    _require_columns(laps, [RACE_COLUMN, "Driver", "Compound", "TyreLife", "LapNumber"])
+    unknown = set(keys) - set(estimate.pace_s)
+    if unknown:
+        raise KeyError(
+            f"model has no baseline for {sorted(unknown)[:3]}; it was fitted on "
+            "other races or drivers"
+        )
+    missing_races = set(races) - set(race_distance)
+    if missing_races:
+        raise KeyError(f"no race distance given for {sorted(missing_races)}")
+
+
 def predict_lap_time(
     laps: pd.DataFrame,
     estimate: DegradationEstimate,
@@ -180,14 +211,12 @@ def predict_lap_time(
 ) -> pd.Series:
     """Predict the lap time the model expects for each lap.
 
-    Used to work out what a lap would have been at racing pace, which is how
-    the cost of a pit stop is measured: compare the real in and out laps
-    against what the same laps would have taken had the car stayed out.
+    Used to measure a pit stop's cost: the real in and out laps against what
+    those laps would have taken had the car stayed out.
 
-    The race distance has to be passed in rather than read off ``laps``. Fuel
-    remaining depends on how many laps the race runs to, so inferring it from
-    whatever rows were handed over would silently give the wrong answer for any
-    frame that is not a whole race, which is the normal case here.
+    The race distance is passed in rather than read off ``laps``: inferring it
+    from whatever rows were handed over gives the wrong fuel term for any frame
+    that is not a whole race, which is the normal case here.
 
     Args:
         laps: Laps with race, driver, compound, tyre age and lap number.
@@ -198,21 +227,12 @@ def predict_lap_time(
         Predicted lap times in seconds.
 
     Raises:
-        KeyError: If a required column is absent, if a lap belongs to a driver
-            and race the model never saw, or if a race has no distance given.
+        KeyError: If a column is absent, a driver and race was never fitted,
+            or a race has no distance given.
     """
-    _require_columns(laps, [RACE_COLUMN, "Driver", "Compound", "TyreLife", "LapNumber"])
     keys = pace_keys(laps)
-    unknown = set(keys) - set(estimate.pace_s)
-    if unknown:
-        raise KeyError(
-            f"model has no baseline for {sorted(unknown)[:3]}; it was fitted on "
-            "other races or drivers"
-        )
     races = laps[RACE_COLUMN].astype(str)
-    missing_races = set(races) - set(race_distance)
-    if missing_races:
-        raise KeyError(f"no race distance given for {sorted(missing_races)}")
+    _check_predictable(laps, keys, races, estimate, race_distance)
     compounds = laps["Compound"].astype(str)
     fuel_remaining = races.map(race_distance).astype(float) - laps[
         "LapNumber"

@@ -109,6 +109,26 @@ def report(
     print("  difference, while the finishing gap also carries track position:")
     print("  the two stop finished in dirty air at a circuit where passing is")
     print("  rare, so it could not use whatever pace it had left.")
+    report_pit_loss_sensitivity(one_stop, two_stop, result, pit_loss)
+
+
+def report_pit_loss_sensitivity(
+    one_stop: Strategy,
+    two_stop: Strategy,
+    result: BootstrapResult,
+    pit_loss: float,
+) -> None:
+    """Show how much the answer moves if the pit loss is wrong.
+
+    The pit loss is one measured number whose own uncertainty is not carried
+    through the interval, so its effect is shown separately.
+
+    Args:
+        one_stop: The one stop strategy as run.
+        two_stop: The two stop strategy as run.
+        result: Fitted coefficients with their resampled fits.
+        pit_loss: Measured seconds lost per pit stop.
+    """
     for offset in (-2.0, 2.0):
         shifted = derived_interval(
             result,
