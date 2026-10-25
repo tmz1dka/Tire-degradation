@@ -21,7 +21,11 @@ import logging
 
 import pandas as pd
 
-from tyre_deg.config import FUEL_SECONDS_PER_KG, RACE_FUEL_MASS_KG
+from tyre_deg.config import (
+    FUEL_SECONDS_PER_KG,
+    RACE_COLUMN,
+    RACE_FUEL_MASS_KG,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -110,3 +114,29 @@ def fuel_corrected_lap_time(
         )
     remaining = laps_of_fuel_remaining(laps, total_race_laps)
     return laps["lap_time_s"] - remaining * seconds_per_lap
+
+def laps_of_fuel_remaining_by_race(
+    laps: pd.DataFrame,
+    race_column: str = RACE_COLUMN,
+) -> pd.Series:
+    """Return laps of fuel remaining, taking each race's length separately.
+
+    Races differ in length, so a frame holding several of them cannot share one
+    race distance. Each race's distance is taken as its highest lap number.
+
+    Args:
+        laps: Lap frame with ``LapNumber`` and a race identifier column.
+        race_column: Column naming the race each lap belongs to.
+
+    Returns:
+        Laps of fuel remaining, 0 on each race's final lap.
+
+    Raises:
+        KeyError: If a required column is absent.
+    """
+    required = {"LapNumber", race_column}
+    missing = required - set(laps.columns)
+    if missing:
+        raise KeyError(f"lap frame is missing columns {sorted(missing)}")
+    race_distance = laps.groupby(race_column)["LapNumber"].transform("max")
+    return race_distance - laps["LapNumber"]

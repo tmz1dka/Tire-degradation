@@ -14,6 +14,7 @@ from tests.conftest import RACE_LAPS, StintFactory
 from tyre_deg.fuel import (
     fuel_corrected_lap_time,
     laps_of_fuel_remaining,
+    laps_of_fuel_remaining_by_race,
     physical_fuel_effect,
 )
 
@@ -101,3 +102,20 @@ def test_correction_rejects_a_negative_fuel_effect(
 def test_correction_needs_a_lap_time_column() -> None:
     with pytest.raises(KeyError, match="lap_time_s"):
         fuel_corrected_lap_time(pd.DataFrame({"LapNumber": [1.0]}), 0.04, RACE_LAPS)
+
+
+def test_fuel_remaining_uses_each_races_own_distance() -> None:
+    laps = pd.DataFrame(
+        {
+            "LapNumber": [1.0, 50.0, 1.0, 70.0],
+            "race_id": ["2023 A", "2023 A", "2024 B", "2024 B"],
+        }
+    )
+    remaining = laps_of_fuel_remaining_by_race(laps)
+    # Race A ran to lap 50, race B to lap 70.
+    assert remaining.tolist() == [49.0, 0.0, 69.0, 0.0]
+
+
+def test_fuel_remaining_by_race_needs_a_race_column() -> None:
+    with pytest.raises(KeyError, match="race_id"):
+        laps_of_fuel_remaining_by_race(pd.DataFrame({"LapNumber": [1.0]}))

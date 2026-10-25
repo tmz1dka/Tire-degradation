@@ -102,7 +102,8 @@ laps each and cover every strategy actually run in 2025.
 
 **Cost accepted.** Compound choice is not random. Teams pick tyres to suit the
 car, the track position and the plan, so a coefficient partly reflects how that
-tyre was used rather than the tyre alone.
+tyre was used rather than the tyre alone. This shows up in the fitted result:
+the two compounds' degradation rates cannot be told apart. See section 7.
 
 ## 5. Which laps go into the fit
 
@@ -220,6 +221,17 @@ The code keeps this distinction visible. The uncontrolled estimator lives in
 module docstring says not to quote them as the project's estimate. It exists to
 reproduce the evidence in section 6, not to answer the question.
 
+**What the fitted model actually gave.** Driver and race intercepts did not
+restore the expected ordering. Fitted on 2023 and 2024, the hard still comes out
+steeper than the medium, 0.0784 against 0.0649 s/lap. The difference is 0.0135
+s/lap with an interval of -0.0070 to 0.0309, which includes zero, so the honest
+reading is that this data cannot tell the two compounds apart, not that the hard
+degrades faster. The fuel effect came out at 0.0437 s/lap, and its interval of
+0.0395 to 0.0484 contains the physical estimate of 0.0429 that section 6 would
+otherwise have assumed. Two independent routes to the same number.
+
+**Reproduce.** `python scripts/fit_model.py`.
+
 **Cost accepted.** A per-driver baseline removes each driver's average pace, not
 changes in how they drove during the race. A driver nursing the tyres to make a
 one-stop work shows less degradation, and that driving is tied to the very
@@ -251,6 +263,13 @@ split leak, and it makes ordinary standard errors far too narrow.
 - *Ordinary least squares standard errors.* The default, and badly understated
   when laps are serially correlated.
 
+**Comparing two coefficients.** Checking whether two intervals overlap is not a
+test of whether two coefficients differ: intervals can overlap while the
+difference is clearly non-zero, and the reverse happens too. The difference is
+therefore recomputed inside every resample and reported with its own interval.
+The same machinery carries the strategy comparison, which is a function of
+several coefficients at once.
+
 **Cost accepted.** Two training races means only two cross-validation folds,
 which is very little to choose a model form with, and one test race means the
 out-of-sample error is a noisy estimate. A single good prediction cannot tell a
@@ -263,10 +282,13 @@ written as a function that returns a true or false mask per lap, and keep the
 scripts in `scripts/` thin. `scripts/cleaning_report.py` regenerates the numbers
 in section 5.
 
-The fuel correction in `src/tyre_deg/fuel.py` and the slope diagnostics in
-`src/tyre_deg/diagnostics.py` follow the same pattern: pure functions, tested
-against lap times built with a known degradation rate and a known fuel effect so
-the maths can be checked against an answer known in advance.
+The fuel correction in `src/tyre_deg/fuel.py`, the slope diagnostics in
+`src/tyre_deg/diagnostics.py` and the model in `src/tyre_deg/model.py` follow
+the same pattern: pure functions, tested against lap times built with a known
+degradation rate and a known fuel effect so the maths can be checked against an
+answer known in advance. The model tests also check that a single stint cannot
+separate fuel from tyre age, and that two stints can, which is the property the
+whole design rests on.
 
 **Why.** Masks compose, and each one can be tested on its own against a small
 hand-built table of laps. Applying them one at a time also lets the pipeline

@@ -22,11 +22,47 @@ assumption would be doing more work than the data. That is why the model
 estimates the fuel effect rather than assuming one, and reports the range
 alongside the answer.
 
-**Status.** The data pipeline and the fuel correction are built and tested. The
-degradation model, the strategy simulation and the held-out test below are still
-to come. The slopes above pool every driver with no control for pace, so they
-are a diagnostic of the problem rather than this project's estimate of
-degradation.
+The slopes on that chart pool every driver with no control for pace, so they
+diagnose the problem rather than answer the question. The model below does that.
+
+## What the model estimates
+
+Fitted on the 2023 and 2024 races, 2029 clean laps, with one intercept per
+driver per race. Intervals come from resampling whole stints 1000 times, not
+individual laps, because laps within a stint share a driver, a car, a tyre set
+and a fuel load.
+
+| Term | Estimate | 95% interval |
+|---|---|---|
+| Fuel effect, per lap of fuel remaining | +0.0437 s | +0.0395 to +0.0484 |
+| Medium degradation, per lap of tyre age | +0.0649 s | +0.0515 to +0.0825 |
+| Hard degradation, per lap of tyre age | +0.0784 s | +0.0680 to +0.0904 |
+
+Two things worth drawing out.
+
+**The fuel effect was measured, not assumed.** Nothing told the model that a
+Formula 1 car burns about 100kg of fuel worth roughly 0.03 seconds a kilogram.
+It arrived at 0.0437 seconds per lap from the lap times alone, and the interval
+contains the 0.0429 that physics predicts. Two independent routes to the same
+number is the strongest check available here.
+
+What makes that possible is the shape of a race. Within one driver's race, lap
+number climbs steadily while tyre age drops back to zero at every pit stop. A
+ramp and a sawtooth can be told apart, so one race is enough to separate fuel
+from tyre wear. A single stint is not, and the test suite checks exactly that.
+
+**The two compounds cannot be told apart.** The hard appears to degrade faster
+than the medium, which is the wrong way round for a harder tyre. But the
+difference is +0.0135 s/lap with an interval of -0.0070 to +0.0309, which
+includes zero. The honest conclusion is that this data cannot separate them, not
+that the hard is worse. Judging that by eye from the two rows above would have
+been wrong: intervals can overlap while a difference is still clearly real, and
+can look separate when it is not. The difference has to be recomputed inside
+every resample, which is what the code does.
+
+**Status.** The data pipeline, the fuel correction and the degradation model are
+built and tested. The strategy simulation and the held-out test below are still
+to come.
 
 ## The test this is building towards
 
@@ -88,6 +124,7 @@ Run the tests, and regenerate every figure and number quoted above:
 .venv/bin/python scripts/cleaning_report.py
 .venv/bin/python scripts/fuel_sensitivity.py
 .venv/bin/python scripts/plot_fuel_correction.py
+.venv/bin/python scripts/fit_model.py
 ```
 
 FastF1 caches downloaded sessions in `cache/` (gitignored), so each race is

@@ -14,7 +14,7 @@ from pathlib import Path
 import fastf1
 import pandas as pd
 
-from tyre_deg.config import CACHE_DIR, MODELLING_SEASONS
+from tyre_deg.config import CACHE_DIR, MODELLING_SEASONS, RACE_COLUMN
 
 logger = logging.getLogger(__name__)
 
@@ -95,11 +95,15 @@ def race_laps(session: fastf1.core.Session) -> pd.DataFrame:
         session: A loaded FastF1 race session.
 
     Returns:
-        A copy of the lap frame with ``lap_time_s`` and ``session_time_s`` added.
+        A copy of the lap frame with ``lap_time_s``, ``session_time_s``,
+        ``season`` and ``race_id`` added. The race columns let laps from several
+        races be concatenated and still fitted with per-race intercepts.
     """
     laps = session.laps.copy()
     laps["lap_time_s"] = laps["LapTime"].dt.total_seconds()
     laps["session_time_s"] = laps["Time"].dt.total_seconds()
+    laps["season"] = int(session.event["EventDate"].year)
+    laps[RACE_COLUMN] = f"{laps['season'].iloc[0]} {session.event['EventName']}"
     return laps
 
 

@@ -10,6 +10,15 @@ from pathlib import Path
 # FastF1 writes raw session data here and this project only ever reads it back.
 CACHE_DIR = Path("cache")
 
+# Column naming the race a lap belongs to. Laps from several races are
+# concatenated for fitting, and each race gets its own intercepts.
+RACE_COLUMN = "race_id"
+
+# Decision 7: the compound every other compound's baseline is measured against.
+# The hard has the most clean laps at the Hungaroring, so it is the steadiest
+# reference. Changing it moves the offsets, not the degradation slopes.
+REFERENCE_COMPOUND = "HARD"
+
 # Decision 3: the Hungaroring is the pilot circuit, 2023 the pilot race.
 PILOT_CIRCUIT = "Hungary"
 PILOT_SEASON = 2023
