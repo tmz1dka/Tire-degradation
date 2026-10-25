@@ -57,7 +57,7 @@ def report_race(year: int, circuit: str, threshold_s: float) -> None:
 
     Args:
         year: Season to load.
-        circuit: Circuit name FastF1 recognises.
+        circuit: Circuit name FastF1 recognizes.
         threshold_s: Traffic gap threshold to apply.
     """
     laps = race_laps(load_race(year, circuit))
@@ -88,7 +88,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--circuit",
         default=PILOT_CIRCUIT,
-        help="circuit name FastF1 recognises",
+        help="circuit name FastF1 recognizes",
     )
     parser.add_argument(
         "--traffic-gap",

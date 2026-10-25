@@ -56,7 +56,7 @@ def load_race(
 
     Args:
         year: Season, for example 2023.
-        circuit: Circuit or event name FastF1 recognises, for example "Hungary".
+        circuit: Circuit or event name FastF1 recognizes, for example "Hungary".
         cache_dir: Directory holding the FastF1 session cache.
 
     Returns:

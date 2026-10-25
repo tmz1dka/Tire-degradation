@@ -70,7 +70,7 @@ def report(year: int, circuit: str) -> None:
 
     Args:
         year: Season to load.
-        circuit: Circuit name FastF1 recognises.
+        circuit: Circuit name FastF1 recognizes.
     """
     laps = race_laps(load_race(year, circuit))
     total_laps = race_lap_count(laps)

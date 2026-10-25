@@ -187,6 +187,8 @@ tyre age instead.
 **Reproduce.** `python scripts/fuel_sensitivity.py` prints the slope for every
 compound at each assumed fuel effect, including the negative uncorrected medium.
 The soft is reported as having too few laps rather than quietly left out.
+`python scripts/plot_fuel_correction.py` draws the chart at the top of the
+README from the same numbers.
 
 ## 7. One curve per compound, pooled across drivers
 

@@ -10,7 +10,12 @@ import pandas as pd
 import pytest
 from tests.conftest import RACE_LAPS, StintFactory
 
-from tyre_deg.diagnostics import compound_slopes, uncontrolled_slope
+from tyre_deg.diagnostics import (
+    compound_slopes,
+    median_lap_time_by_tyre_age,
+    uncontrolled_line,
+    uncontrolled_slope,
+)
 from tyre_deg.fuel import fuel_corrected_lap_time
 
 
@@ -84,3 +89,66 @@ def test_compound_slopes_order_by_laps_and_keep_thin_compounds_visible(
 def test_compound_slopes_needs_its_input_columns() -> None:
     with pytest.raises(KeyError, match="TyreLife"):
         compound_slopes(pd.DataFrame({"Compound": ["HARD"], "lap_time_s": [80.0]}))
+
+
+def test_line_fit_recovers_slope_and_intercept(
+    stint_factory: StintFactory,
+) -> None:
+    stint = stint_factory(stint_laps=50, base_s=80.0, degradation_s_per_lap=0.06)
+    fit = uncontrolled_line(stint["TyreLife"], stint["lap_time_s"])
+    assert fit is not None
+    assert fit.slope_s_per_lap == pytest.approx(0.06)
+    # The stint starts at a tyre age of one lap, so the intercept sits one
+    # degradation step below the first lap time.
+    assert fit.intercept_s == pytest.approx(80.0)
+    assert fit.laps == 50
+    assert (fit.youngest_age, fit.oldest_age) == (1.0, 50.0)
+
+
+def test_line_fit_predicts_along_the_fitted_line(
+    stint_factory: StintFactory,
+) -> None:
+    stint = stint_factory(stint_laps=50, base_s=80.0, degradation_s_per_lap=0.06)
+    fit = uncontrolled_line(stint["TyreLife"], stint["lap_time_s"])
+    assert fit is not None
+    assert fit.predict(0.0) == pytest.approx(80.0)
+    assert fit.predict(10.0) == pytest.approx(80.6)
+
+
+def test_line_fit_is_none_when_data_is_too_thin(
+    stint_factory: StintFactory,
+) -> None:
+    stint = stint_factory(stint_laps=10)
+    assert uncontrolled_line(stint["TyreLife"], stint["lap_time_s"]) is None
+
+
+def test_median_by_tyre_age_follows_the_degradation(
+    stint_factory: StintFactory,
+) -> None:
+    # Five drivers running the same stint, so every age has five laps.
+    stint = pd.concat(
+        [stint_factory(stint_laps=20, degradation_s_per_lap=0.05) for _ in range(5)],
+        ignore_index=True,
+    )
+    medians = median_lap_time_by_tyre_age(stint, min_laps_per_age=5)
+    assert medians.index.tolist() == [float(age) for age in range(1, 21)]
+    assert medians.iloc[0] == pytest.approx(80.05)
+    assert medians.iloc[-1] == pytest.approx(81.0)
+
+
+def test_median_by_tyre_age_drops_thinly_covered_ages(
+    stint_factory: StintFactory,
+) -> None:
+    common = pd.concat(
+        [stint_factory(stint_laps=5) for _ in range(5)], ignore_index=True
+    )
+    rare = stint_factory(first_lap=40, stint_laps=30).query("TyreLife > 5")
+    medians = median_lap_time_by_tyre_age(
+        pd.concat([common, rare], ignore_index=True), min_laps_per_age=5
+    )
+    assert medians.index.max() == 5.0
+
+
+def test_median_by_tyre_age_needs_its_columns() -> None:
+    with pytest.raises(KeyError, match="TyreLife"):
+        median_lap_time_by_tyre_age(pd.DataFrame({"lap_time_s": [80.0]}))
