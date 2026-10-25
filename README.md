@@ -119,7 +119,8 @@ and it says the two stop was worth about nine seconds of it.
 
 ## Limitations
 
-What this project could not remove, and which way each one pushes.
+The confounders that could not be removed, and which way each one pushes, then
+what the project depends on outside itself.
 
 - **Compound choice is not random.** Teams pick tyres to suit the car, the
   track position and the plan. A degradation rate therefore partly measures how
@@ -143,10 +144,16 @@ What this project could not remove, and which way each one pushes.
 - **Track temperature is not in the fitted model.** Within a race it moves
   almost in step with fuel burn, so including it on this data would have made
   the two impossible to separate.
-- **The data source now requires an account.** Formula 1 closed public access to
-  its timing archive in late 2026. The analysis is unaffected once a race is
-  cached, but reproducing it from scratch needs a free F1 account, which is a
-  dependency on a third party that could change again.
+
+**The data source closed partway through this project.** Formula 1 put its
+timing archive behind a login in late 2026, and the endpoint used here now
+answers with HTTP 401. FastF1 3.9 can sign in with a free F1 account, which is
+why that version is pinned; every number published here was regenerated from the
+cache after the upgrade and none of them moved. Anyone who already has the cache
+is unaffected, and the tests never touched the data at all, so they still pass on
+a fresh clone with no account, no network and no cache. But reproducing the
+analysis from scratch now depends on a third party that has already changed the
+rules once, and could again.
 
 **Status.** The pipeline, the fuel correction, the degradation model, the
 strategy comparison and the test of curved degradation shapes are all built and
