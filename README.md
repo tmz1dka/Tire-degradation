@@ -211,6 +211,78 @@ Run the tests, and regenerate every figure and number quoted above:
 FastF1 caches downloaded sessions in `cache/` (gitignored), so each race is
 downloaded once.
 
+## Asking an agent about the results
+
+The repository ships an MCP server, so a coding agent can query the model
+rather than being told about it. Four tools:
+
+| Tool | Answers |
+|---|---|
+| `list_races` | which races and drivers exist |
+| `get_degradation` | how fast a compound lost lap time in a race, with its interval |
+| `compare_stints` | two drivers' stints side by side |
+| `compare_strategies` | what two drivers' pit strategies were worth against each other |
+
+Install the extra dependency and register it:
+
+```bash
+.venv/bin/python -m pip install -r requirements-mcp.txt
+claude mcp add tyre-degradation -s local -- \
+  "$PWD/.venv/bin/python" "$PWD/src/mcp_server/server.py"
+```
+
+The results it serves are committed, so this works straight after a clone. To
+rebuild them after changing the analysis:
+
+```bash
+.venv/bin/python -m mcp_server.precompute
+```
+
+### An example exchange
+
+> **How fast did the medium degrade at the 2023 race?**
+>
+> 0.0564 seconds per lap of tyre age, with a 95% interval of 0.0403 to 0.0780.
+> That comes from 337 clean racing laps, and the interval is built by resampling
+> whole stints rather than individual laps.
+>
+> **And the soft?**
+>
+> There is no estimate. The soft has 9 clean racing laps in that race against
+> the 40 needed to fit a rate, so it is not modelled. That is not a claim that
+> it degraded slowly: nothing is known about it.
+>
+> **Was Piastri's two-stop quicker than Norris's one-stop in 2025?**
+>
+> On pace, yes, by about 9.0 seconds, with a 95% interval of 4.8 to 13.3
+> seconds in his favour. But that is a difference in clear air. It excludes
+> track position, and Piastri finished second, stuck behind the car he could
+> not pass.
+
+### Design decisions
+
+**The results are precomputed into `data/model_outputs.json`.** A tool call is a
+lookup, not a model fit, so calls are fast and need no FastF1 cache, no network
+and no Formula 1 account. It is the one piece of derived data in the repository
+that is committed, because without it nobody could run the server from a clone
+now that the data source needs a login.
+
+**The file carries the 1000 bootstrap fits, not just the summary intervals.**
+That is what lets `compare_strategies` put a real interval on a pairing it has
+never seen: the difference is recomputed inside every resample, in plain
+arithmetic, offline.
+
+**Every answer carries its uncertainty.** Each tool returns the interval and the
+number of laps behind it, and a compound with too little data returns an
+explanation instead of a number. The aim is that an agent cannot state a result
+more confidently than the data allows.
+
+**The logic sits behind the tools, not inside them.** `mcp_server/data.py` is
+standard library only, with no MCP and no pandas, so it is tested directly and
+the server cannot accidentally start refitting a model. `server.py` is four thin
+wrappers that turn its errors into `ToolError`, which is what makes an agent
+retry with a valid argument instead of reading an error string as an answer.
+
 ### Getting the data
 
 Formula 1 put its timing archive behind a login in late 2026. FastF1 3.9 can

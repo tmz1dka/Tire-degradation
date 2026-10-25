@@ -16,6 +16,12 @@ cache/
 build/
 dist/
 
+# Derived data stays out of git, with one exception: the precomputed model
+# results the MCP server reads. Those are committed so the server works on a
+# fresh clone, which matters now that the data source needs an account.
+data/*
+!data/model_outputs.json
+
 # Tooling
 .pytest_cache/
 .ruff_cache/

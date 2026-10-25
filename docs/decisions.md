@@ -449,3 +449,52 @@ account with a third party that has already changed the rules once. Anyone with
 the cache is unaffected, and the tests never needed the data at all: they build
 their own lap times, so they pass on a fresh clone with no account, no network
 and no cache.
+
+## 13. Serving the results to an agent
+
+**Decision.** Precompute every model output into `data/model_outputs.json`, commit
+that file, and have an MCP server read it. The server never imports FastF1 and
+never fits anything.
+
+**Why.** A tool call should be a lookup. Fitting the model takes about fifteen
+seconds and needs the FastF1 cache; doing that inside a tool call would make the
+server slow and would tie it to data that now sits behind a Formula 1 login.
+Precomputing also makes the server's answers reproducible: they are whatever was
+in the file, and the file records the seed, the number of resamples and the
+thresholds used.
+
+The file is committed, which is the one place this project keeps derived data in
+git. The reason is the same login: without the file in the repository, nobody
+could run the server from a fresh clone. It is 196 KB.
+
+It carries the 1000 bootstrap fits, not only the summary intervals. That is what
+lets the server put an interval on a strategy comparison for any pair of
+drivers: the difference is recomputed inside every resample, which is the same
+reasoning as section 8, done offline in plain arithmetic.
+
+Degradation is fitted per race as well as pooled. A tool answering "how fast did
+the medium degrade at the 2023 race" should give that race's number, and a
+per-race fit works on all three with no failed resamples. The pooled training
+fit is kept separately and is what the strategy comparison uses, because that is
+the one validated against a held-out race.
+
+**Not chosen.**
+- *Fit on demand inside the tool.* Slow, and it would need the cache and an
+  account, so the server would not run for anyone else.
+- *Keep the file out of git, as with every other derived artefact.* Consistent,
+  but it would make the server unusable from a clone, which defeats the point.
+- *Store only the summary intervals.* Smaller, but then any comparison the
+  server had not precomputed could only be given as a point estimate, and the
+  project's own rule is that a number without an interval is not a result.
+- *Let the tools return error messages as text.* An error returned as a string
+  is reported as a successful call, so a model treats the message as the answer.
+  The tools raise instead, which flags the call as failed while still showing
+  the model what went wrong.
+
+**Cost accepted.** The committed file can fall out of step with the code. It is
+rebuilt with one command, and a test asserts the published figures still hold,
+so drift shows up as a failing test rather than a quietly wrong answer. The
+server is also a second thing to keep working: it adds seventeen packages to the
+environment, four of which are a web stack the stdio transport never uses.
+
+**Reproduce.** `python -m mcp_server.precompute`, then `pytest tests/test_mcp_server.py`.

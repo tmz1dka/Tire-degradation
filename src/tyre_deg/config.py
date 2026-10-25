@@ -39,6 +39,11 @@ MODELLED_COMPOUNDS: tuple[str, ...] = ("MEDIUM", "HARD")
 TRAFFIC_GAP_THRESHOLD_S = 1.0
 TRAFFIC_GAP_SENSITIVITY_S: tuple[float, ...] = (0.5, 1.0, 1.5, 2.0)
 
+# A single stint is far too short to estimate degradation from, but its own
+# trend is still worth reporting as a description. Below this many clean laps
+# even that is meaningless, so no trend is reported at all.
+MIN_LAPS_FOR_STINT_TREND = 8
+
 # Decision 5: FastF1's TrackStatus concatenates every status seen during a lap,
 # so these digits are tested for membership, never compared for equality.
 # 4 = safety car, 5 = red flag, 6 = virtual safety car, 7 = VSC ending.

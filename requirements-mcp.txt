@@ -1,0 +1,5 @@
+# Dependencies for the MCP server only. The analysis itself does not need these,
+# which is why they are kept out of requirements.txt: that file is the
+# reproducibility contract for the published numbers.
+-r requirements.txt
+mcp==2.3.0
