@@ -310,3 +310,47 @@ every lap count in section 5 exactly.
 **Cost accepted.** More files than this task strictly needs, and carrying the
 full lap table through every filter instead of shrinking it as it goes. At about
 1,300 laps per race, that costs nothing measurable.
+
+## 10. How two strategies are compared
+
+**Decision.** Compare two strategies by the part of race time that depends on
+them: tyre wear, the compound baselines and the pit stops. Measure the pit loss
+from the races rather than assuming a value. Refuse to simulate a stint longer
+than the oldest tyre in the data.
+
+**Why.** Two strategies over the same race carry the same fuel on each lap and
+belong to the same driver, so pace and fuel are identical in both and cancel in
+the difference. What is left is the tyre and the pit lane, which means the
+answer does not depend on how quick the driver was. The pit loss comes out at
+19.60 s, measured by comparing every real in lap and out lap against what the
+model says those same laps would have taken had the car stayed out on its old
+tyres. The median across stops is used so one slow stop cannot drag it. The
+interval on the comparison is rebuilt inside the same resampled fits that give
+the coefficients their intervals, because the comparison is a function of
+several coefficients at once.
+
+**Not chosen.**
+- *Simulate full race times.* Needs the driver's absolute pace, which cancels
+  anyway, and invites comparing two cars rather than two strategies.
+- *Assume a pit loss of about 20 seconds.* The measured value is 19.60 s, so
+  the guess would have been close, but there is no reason to guess when the
+  races contain the answer.
+- *Let the model extrapolate freely.* A straight line will happily price a 60
+  lap stint from 30 laps of evidence. The simulator refuses any stint longer
+  than the oldest tyre observed for that compound.
+- *Bootstrap the pit loss as well.* It would be more complete, but measuring it
+  requires predicting every lap of every training race, and doing that inside
+  1000 resamples costs far more than the answer is worth. Its effect is reported
+  as a sensitivity instead: two seconds on the pit loss moves the comparison by
+  about two seconds.
+
+**Cost accepted.** Track position is not modelled, and at this circuit that is
+the difference between a faster strategy and a winning one. The held-out test
+makes the point: the model puts the 2025 two stop about nine seconds ahead on
+pace, and the one stop won the race by 0.698 s. The model answers the narrower
+question of which strategy was quicker in clear air. Two other things push the
+same way and cannot be separated from this data: a driver committed to a one
+stop manages the tyre, and a straight line charges full price for every lap of a
+long stint. Both make the one stop look worse than it was.
+
+**Reproduce.** `python scripts/strategy_test.py`.

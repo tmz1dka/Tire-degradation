@@ -60,27 +60,75 @@ been wrong: intervals can overlap while a difference is still clearly real, and
 can look separate when it is not. The difference has to be recomputed inside
 every resample, which is what the code does.
 
-**Status.** The data pipeline, the fuel correction and the degradation model are
-built and tested. The strategy simulation and the held-out test below are still
-to come.
+## The held-out test
 
-## The test this is building towards
+The model was fitted on 2023 and 2024 only. The 2025 race supplied two things it
+could not have known: which strategies were run, and how it finished.
 
-At the 2025 Hungarian GP, McLaren split their strategies:
+| | Strategy | |
+|---|---|---|
+| Norris | one stop: medium 31 laps, hard 39 | won |
+| Piastri | two stops: medium 18, hard 27, hard 25 | +0.698 s |
 
-| Driver  | Result        | Strategy                                  |
-|---------|---------------|-------------------------------------------|
-| Norris  | P1            | 1 stop: medium 31 laps, then hard 39      |
-| Piastri | P2, +0.698 s  | 2 stops: medium 18, hard 27, hard 25      |
+Pit loss, measured from the training races rather than assumed: 19.60 s.
 
-Same car, opposite strategies, seven tenths apart after 70 laps. The model is
-fitted on the 2023 and 2024 races only, then asked what the two-stop cost
-against a one-stop, without ever having seen the 2025 race.
+**The model says the two stop had about nine seconds more pace**, at -9.00 s
+with an interval of -13.30 to -4.77. Norris won on the one stop.
 
-The observed 0.698 s gap is not a pure strategy effect: it also includes track
-position and dirty air at a circuit where overtaking is rare. The model
-estimates a free-air difference, and the write-up compares the two numbers
-instead of claiming they are the same thing.
+Both of those can be true at once, and the distance between them is the most
+interesting thing in this project. The arithmetic is simple enough to check by
+hand: the second stop buys 28.6 s of tyre wear and pays 19.6 s of pit lane for
+it, so on raw pace it is 9 s ahead. Three reasons that did not win the race.
+
+**Track position.** The model estimates a difference in free air. Piastri spent
+the end of the race behind Norris at a circuit where overtaking is close to
+impossible, so pace he may have had was pace he could not use. A model of lap
+times cannot see this, and at the Hungaroring it is decisive.
+
+**Tyre management.** A driver committed to a one stop drives to protect the
+tyre. The model charges him the field average degradation rate, which is
+measured mostly from cars not doing that. This is not a flaw that more data
+fixes: how hard a driver pushes is chosen along with the strategy, so the two
+cannot be separated from race data alone.
+
+**A straight line charges full price for every lap.** That 28.6 s assumes the
+hard tyre keeps losing 0.078 s every lap for 39 straight laps. Real tyres often
+drop quickly and then settle. If the curve flattens, the one stop is cheaper
+than the model thinks, and the 9 s shrinks. Testing a curved form against
+held-out races is the obvious next step and the model was built to make it easy.
+
+So the honest summary is that the model answers a narrower question than "who
+wins": it estimates the pace difference between two strategies in clear air,
+and it says the two stop was worth about nine seconds of it.
+
+## Limitations
+
+What this project could not remove, and which way each one pushes.
+
+- **Compound choice is not random.** Teams pick tyres to suit the car, the
+  track position and the plan. A degradation rate therefore partly measures how
+  a tyre was used. The fitted difference between the medium and the hard
+  includes zero, which is consistent with this.
+- **Tyre management is tied to the strategy being judged.** A driver nursing a
+  long stint shows less degradation. This biases the cost of long stints upward,
+  which means the one stop is probably treated worse than it deserves.
+- **Degradation is modelled as a straight line.** Same direction: linear wear
+  overstates the price of a long stint if the real curve flattens.
+- **Track position is not modelled at all.** At this circuit that is the
+  difference between a faster strategy and a winning one.
+- **Two training races.** Only two cross-validation folds are available inside
+  the training set, so model form cannot be chosen with much confidence, and
+  one test race makes the out-of-sample check noisy.
+- **The pit loss is a single measured number.** Its uncertainty is not carried
+  through the intervals. Moving it by two seconds either way moves the answer
+  by about two seconds, which is reported alongside.
+- **Track temperature is not in the fitted model.** Within a race it moves
+  almost in step with fuel burn, so including it on this data would have made
+  the two impossible to separate.
+
+**Status.** The pipeline, the fuel correction, the degradation model and the
+strategy comparison are built and tested. The next step is testing a curved
+degradation form against held-out races, which the limitations above point to.
 
 ## Approach
 
@@ -125,6 +173,7 @@ Run the tests, and regenerate every figure and number quoted above:
 .venv/bin/python scripts/fuel_sensitivity.py
 .venv/bin/python scripts/plot_fuel_correction.py
 .venv/bin/python scripts/fit_model.py
+.venv/bin/python scripts/strategy_test.py
 ```
 
 FastF1 caches downloaded sessions in `cache/` (gitignored), so each race is

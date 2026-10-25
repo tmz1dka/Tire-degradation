@@ -51,6 +51,7 @@ from tyre_deg.fuel import laps_of_fuel_remaining_by_race
 logger = logging.getLogger(__name__)
 
 FUEL_TERM = "fuel_per_lap_remaining"
+PACE_PREFIX = "pace_"
 STINT_KEY_COLUMNS = (RACE_COLUMN, "Driver", "Stint")
 
 
@@ -65,7 +66,10 @@ class DegradationEstimate:
             reference compound, which is 0 by construction.
         reference_compound: Compound the offsets are measured against.
         laps: Laps the fit used.
-        intercepts: Number of driver and race intercepts fitted.
+        pace_s: Baseline lap time for each driver in each race, keyed by
+            "<race id> <driver>". These are nuisance terms: they soak up car and
+            driver pace so the slopes do not have to, and they are not a ranking
+            of driver quality.
         residual_std_s: Standard deviation of the residuals, in seconds.
     """
 
@@ -74,8 +78,13 @@ class DegradationEstimate:
     compound_offset_s: Mapping[str, float]
     reference_compound: str
     laps: int
-    intercepts: int
+    pace_s: Mapping[str, float]
     residual_std_s: float
+
+    @property
+    def intercepts(self) -> int:
+        """How many driver and race baselines were fitted."""
+        return len(self.pace_s)
 
 
 def _require_columns(laps: pd.DataFrame, columns: Sequence[str]) -> None:
@@ -91,6 +100,71 @@ def _require_columns(laps: pd.DataFrame, columns: Sequence[str]) -> None:
     missing = set(columns) - set(laps.columns)
     if missing:
         raise KeyError(f"lap frame is missing columns {sorted(missing)}")
+
+
+def pace_keys(laps: pd.DataFrame) -> pd.Series:
+    """Return the driver and race key each lap belongs to.
+
+    Args:
+        laps: Lap frame with race and driver columns.
+
+    Returns:
+        One key per lap, of the form "<race id> <driver>".
+    """
+    return laps[RACE_COLUMN].astype(str) + " " + laps["Driver"].astype(str)
+
+
+def predict_lap_time(
+    laps: pd.DataFrame,
+    estimate: DegradationEstimate,
+    race_distance: Mapping[str, int],
+) -> pd.Series:
+    """Predict the lap time the model expects for each lap.
+
+    Used to work out what a lap would have been at racing pace, which is how
+    the cost of a pit stop is measured: compare the real in and out laps
+    against what the same laps would have taken had the car stayed out.
+
+    The race distance has to be passed in rather than read off ``laps``. Fuel
+    remaining depends on how many laps the race runs to, so inferring it from
+    whatever rows were handed over would silently give the wrong answer for any
+    frame that is not a whole race, which is the normal case here.
+
+    Args:
+        laps: Laps with race, driver, compound, tyre age and lap number.
+        estimate: A fitted model.
+        race_distance: Laps in each race, keyed by race identifier.
+
+    Returns:
+        Predicted lap times in seconds.
+
+    Raises:
+        KeyError: If a required column is absent, if a lap belongs to a driver
+            and race the model never saw, or if a race has no distance given.
+    """
+    _require_columns(laps, [RACE_COLUMN, "Driver", "Compound", "TyreLife", "LapNumber"])
+    keys = pace_keys(laps)
+    unknown = set(keys) - set(estimate.pace_s)
+    if unknown:
+        raise KeyError(
+            f"model has no baseline for {sorted(unknown)[:3]}; it was fitted on "
+            "other races or drivers"
+        )
+    races = laps[RACE_COLUMN].astype(str)
+    missing_races = set(races) - set(race_distance)
+    if missing_races:
+        raise KeyError(f"no race distance given for {sorted(missing_races)}")
+    compounds = laps["Compound"].astype(str)
+    fuel_remaining = races.map(race_distance).astype(float) - laps[
+        "LapNumber"
+    ].astype(float)
+    return (
+        keys.map(estimate.pace_s).astype(float)
+        + estimate.fuel_s_per_lap * fuel_remaining
+        + compounds.map(estimate.degradation_s_per_lap).astype(float)
+        * laps["TyreLife"].astype(float)
+        + compounds.map(estimate.compound_offset_s).astype(float)
+    )
 
 
 def build_design(
@@ -117,8 +191,8 @@ def build_design(
     if used.empty:
         raise ValueError(f"no laps for compounds {sorted(compounds)}")
     design = pd.get_dummies(
-        used[RACE_COLUMN].astype(str) + " " + used["Driver"].astype(str),
-        prefix="pace",
+        pace_keys(used),
+        prefix=PACE_PREFIX.rstrip("_"),
         dtype=float,
     )
     design[FUEL_TERM] = laps_of_fuel_remaining_by_race(used).astype(float)
@@ -198,7 +272,11 @@ def _estimate_from_coefficients(
         },
         reference_compound=reference_compound,
         laps=len(residuals),
-        intercepts=sum(name.startswith("pace_") for name in by_name),
+        pace_s={
+            name.removeprefix(PACE_PREFIX): float(value)
+            for name, value in by_name.items()
+            if name.startswith(PACE_PREFIX)
+        },
         residual_std_s=float(np.sqrt(residuals @ residuals / degrees_of_freedom)),
     )
 
