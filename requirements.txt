@@ -4,7 +4,7 @@
 annotated-types==0.8.0
 attrs==26.1.0
 cattrs==26.1.0
-certifi==2026.7.22
+certifi==2026.10.19
 cffi==2.1.1
 charset-normalizer==3.5.1
 contourpy==1.3.3
@@ -24,12 +24,12 @@ msgpack==1.1.2
 numpy==2.4.6
 packaging==26.3
 pandas==2.3.3
-pillow==12.3.0
+pillow==13.0.0
 platformdirs==4.11.7
 pycparser==3.0
 pydantic==2.13.5
 pydantic_core==2.46.5
-PyJWT==2.13.0
+PyJWT==2.15.0
 pyparsing==3.3.2
 python-dateutil==2.9.0.post0
 pytz==2026.3.post1
@@ -44,5 +44,5 @@ typing-inspection==0.4.4
 typing_extensions==4.16.0
 tzdata==2026.3
 url-normalize==3.0.0
-urllib3==2.7.0
+urllib3==2.8.0
 websockets==17.1
