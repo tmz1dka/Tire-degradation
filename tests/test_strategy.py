@@ -15,6 +15,7 @@ from tyre_deg.strategy import (
     Strategy,
     check_within_evidence,
     compare_strategies,
+    cumulative_cost,
     max_observed_tyre_age,
     measure_pit_loss,
     strategy_cost,
@@ -180,3 +181,35 @@ def test_pit_loss_needs_its_columns() -> None:
     estimate = make_estimate({"HARD": 0.0}, {"HARD": 0.0})
     with pytest.raises(KeyError, match="TyreLife"):
         measure_pit_loss(pd.DataFrame({"race_id": ["x"], "Driver": ["VER"]}), estimate)
+
+
+def test_cumulative_cost_ends_where_the_total_does() -> None:
+    estimate = make_estimate({"MEDIUM": 0.05, "HARD": 0.07},
+                             {"MEDIUM": -0.3, "HARD": 0.0})
+    strategy = strategy_from_stints("two stop", [("MEDIUM", 18), ("HARD", 27),
+                                                 ("HARD", 25)])
+    running = cumulative_cost(strategy, estimate, PIT_LOSS)
+    assert len(running) == strategy.race_laps
+    assert running.index[0] == 1
+    assert running.iloc[-1] == pytest.approx(
+        strategy_cost(strategy, estimate, PIT_LOSS)
+    )
+
+
+def test_cumulative_cost_steps_up_at_each_pit_stop() -> None:
+    estimate = make_estimate({"HARD": 0.0}, {"HARD": 0.0})
+    strategy = strategy_from_stints("one stop", [("HARD", 5), ("HARD", 5)])
+    running = cumulative_cost(strategy, estimate, PIT_LOSS)
+    # With no degradation the only cost is the stop, charged on lap 6.
+    assert running.loc[5] == pytest.approx(0.0)
+    assert running.loc[6] == pytest.approx(PIT_LOSS)
+
+
+def test_cumulative_cost_climbs_faster_on_an_older_tyre() -> None:
+    estimate = make_estimate({"HARD": 0.07}, {"HARD": 0.0})
+    running = cumulative_cost(
+        strategy_from_stints("no stop", [("HARD", 30)]), estimate, PIT_LOSS
+    )
+    early = running.loc[2] - running.loc[1]
+    late = running.loc[30] - running.loc[29]
+    assert late > early

@@ -30,7 +30,8 @@ def enable_cache(cache_dir: Path = CACHE_DIR) -> Path:
         The directory that was enabled.
     """
     cache_dir.mkdir(parents=True, exist_ok=True)
-    fastf1.Cache.enable_cache(str(cache_dir))
+    # FastF1 3.9 replaced enable_cache with configure.
+    fastf1.Cache.configure(cache_dir=str(cache_dir))
     return cache_dir
 
 

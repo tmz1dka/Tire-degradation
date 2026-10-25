@@ -331,3 +331,40 @@ def strategy_from_stints(name: str, stints: Sequence[tuple[str, int]]) -> Strate
         The strategy.
     """
     return Strategy(name=name, stints=tuple(Stint(c, n) for c, n in stints))
+
+
+def cumulative_cost(
+    strategy: Strategy,
+    estimate: DegradationEstimate,
+    pit_loss_s: float,
+) -> pd.Series:
+    """Return the strategy dependent time accumulated by each lap of the race.
+
+    The pit loss lands on the lap a new stint starts, so the series steps up
+    there and then climbs more slowly on fresh tyres. The final value equals
+    :func:`strategy_cost`.
+
+    Args:
+        strategy: The strategy to cost.
+        estimate: A fitted model.
+        pit_loss_s: Seconds lost per pit stop.
+
+    Returns:
+        Running cost in seconds, indexed by lap number from 1.
+
+    Raises:
+        KeyError: If the model has no coefficient for a compound used.
+    """
+    running = 0.0
+    costs: list[float] = []
+    for index, stint in enumerate(strategy.stints):
+        if index > 0:
+            running += pit_loss_s
+        rate = estimate.degradation_s_per_lap[stint.compound]
+        offset = estimate.compound_offset_s[stint.compound]
+        for age in stint.tyre_ages:
+            running += rate * age + offset
+            costs.append(running)
+    return pd.Series(
+        costs, index=pd.RangeIndex(1, len(costs) + 1, name="lap"), name=strategy.name
+    )

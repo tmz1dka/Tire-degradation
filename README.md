@@ -27,6 +27,19 @@ diagnose the problem rather than answer the question. The model below does that.
 
 ## What the model estimates
 
+![Left: the fitted fuel effect and the two compounds' degradation rates, each
+with its confidence interval. A star marks the physical estimate of the fuel
+effect, which falls inside the fitted interval. The two compound intervals
+overlap. Right: the running time difference between the two 2025 strategies
+across the race, stepping up at each pit stop and falling back on fresher
+tyres, ending about nine seconds in favour of the two
+stop.](figures/model_results.png)
+
+The right panel is the whole argument in one picture. Each pit stop costs the
+two stop about twenty seconds, which is the near vertical jump, and it then
+earns the time back on younger tyres. After two stops it is nine seconds ahead
+on pace. The diamond is where the race actually finished.
+
 Fitted on the 2023 and 2024 races, 2029 clean laps, with one intercept per
 driver per race. Intervals come from resampling whole stints 1000 times, not
 individual laps, because laps within a stint share a driver, a car, a tyre set
@@ -185,6 +198,7 @@ Run the tests, and regenerate every figure and number quoted above:
 .venv/bin/python scripts/fit_model.py
 .venv/bin/python scripts/strategy_test.py
 .venv/bin/python scripts/compare_forms.py
+.venv/bin/python scripts/plot_model_results.py
 ```
 
 FastF1 caches downloaded sessions in `cache/` (gitignored), so each race is
