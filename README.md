@@ -61,6 +61,15 @@ Requires Python 3.11.
 python3.11 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt       # runtime
 .venv/bin/python -m pip install -r requirements-dev.txt   # tests, linting, audit
+.venv/bin/python -m pip install -e .                      # the tyre_deg package
+```
+
+Run the tests, and regenerate the lap cleaning figures quoted in the decisions
+file:
+
+```bash
+.venv/bin/python -m pytest
+.venv/bin/python scripts/cleaning_report.py
 ```
 
 FastF1 caches downloaded sessions in `cache/` (gitignored), so each race is

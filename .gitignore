@@ -11,6 +11,11 @@ venv/
 # FastF1 session cache: large, re-downloadable, never committed
 cache/
 
+# Packaging artifacts from `pip install -e .`
+*.egg-info/
+build/
+dist/
+
 # Tooling
 .pytest_cache/
 .ruff_cache/

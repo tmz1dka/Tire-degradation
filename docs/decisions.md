@@ -141,6 +141,10 @@ sequence. The traffic filter also costs the most in 2025, where 30.1% of green
 laps are within a second against 15.2% in 2023, so the test race is the most
 heavily filtered of the three.
 
+**Reproduce.** `python scripts/cleaning_report.py` prints the lap counts,
+retained shares, traffic shares and per-compound counts quoted above, for all
+three races.
+
 ## 6. Estimate the fuel effect instead of assuming it
 
 **Decision.** Estimate the fuel coefficient from the data, and report fits at
@@ -240,3 +244,31 @@ split leak, and it makes ordinary standard errors far too narrow.
 which is very little to choose a model form with, and one test race means the
 out-of-sample error is a noisy estimate. A single good prediction cannot tell a
 good model from a lucky one.
+
+## 9. Cleaning code as a tested library, not a notebook
+
+**Decision.** Put loading and cleaning in `src/tyre_deg/`, with each filter
+written as a function that returns a true or false mask per lap, and keep the
+scripts in `scripts/` thin. `scripts/cleaning_report.py` regenerates the numbers
+in section 5.
+
+**Why.** Masks compose, and each one can be tested on its own against a small
+hand-built table of laps. Applying them one at a time also lets the pipeline
+count how many laps each filter removed, which is what produces the table in
+section 5. The 33 tests build their own data, so they need no network access and
+no cached sessions and will run on a fresh clone. Running the script reproduces
+every lap count in section 5 exactly.
+
+**Not chosen.**
+- *Do the cleaning in a notebook.* Fast to write, but the logic cannot be tested
+  or reused, and the numbers in this file would not be reproducible.
+- *A single function that takes laps and returns cleaned laps.* Simpler to call,
+  but it cannot report which filter removed what, and a failing test would not
+  say which rule broke.
+- *Filters that drop rows instead of returning masks.* Each would have to be
+  tested through the whole chain, and the order of filtering would be hidden
+  inside them rather than visible in one place.
+
+**Cost accepted.** More files than this task strictly needs, and carrying the
+full lap table through every filter instead of shrinking it as it goes. At about
+1,300 laps per race, that costs nothing measurable.
