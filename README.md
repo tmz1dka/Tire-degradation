@@ -70,6 +70,7 @@ file:
 ```bash
 .venv/bin/python -m pytest
 .venv/bin/python scripts/cleaning_report.py
+.venv/bin/python scripts/fuel_sensitivity.py
 ```
 
 FastF1 caches downloaded sessions in `cache/` (gitignored), so each race is

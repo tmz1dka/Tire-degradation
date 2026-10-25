@@ -184,6 +184,10 @@ fuel effect is not clean. A single linear fuel term also cannot capture the fact
 that a heavier car wears its tyres faster, so any such effect is credited to
 tyre age instead.
 
+**Reproduce.** `python scripts/fuel_sensitivity.py` prints the slope for every
+compound at each assumed fuel effect, including the negative uncorrected medium.
+The soft is reported as having too few laps rather than quietly left out.
+
 ## 7. One curve per compound, pooled across drivers
 
 **Decision.** Fit pooled across the whole field with a separate baseline pace
@@ -208,6 +212,11 @@ cross-driver spread in pit timing that the fuel estimate depends on.
   s/lap, which is the wrong way round for a harder tyre. The compounds are run
   by different cars at different points in the race, so an uncontrolled slope
   partly measures who was on which tyre and when.
+
+The code keeps this distinction visible. The uncontrolled estimator lives in
+`src/tyre_deg/diagnostics.py`, its functions are named "uncontrolled", and the
+module docstring says not to quote them as the project's estimate. It exists to
+reproduce the evidence in section 6, not to answer the question.
 
 **Cost accepted.** A per-driver baseline removes each driver's average pace, not
 changes in how they drove during the race. A driver nursing the tyres to make a
@@ -251,6 +260,11 @@ good model from a lucky one.
 written as a function that returns a true or false mask per lap, and keep the
 scripts in `scripts/` thin. `scripts/cleaning_report.py` regenerates the numbers
 in section 5.
+
+The fuel correction in `src/tyre_deg/fuel.py` and the slope diagnostics in
+`src/tyre_deg/diagnostics.py` follow the same pattern: pure functions, tested
+against lap times built with a known degradation rate and a known fuel effect so
+the maths can be checked against an answer known in advance.
 
 **Why.** Masks compose, and each one can be tested on its own against a small
 hand-built table of laps. Applying them one at a time also lets the pipeline
