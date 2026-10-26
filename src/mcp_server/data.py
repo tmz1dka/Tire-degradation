@@ -29,6 +29,13 @@ UNCLEAR_NOTE = (
     "that, rather than reporting the difference as real."
 )
 
+PER_RACE_FIT_NOTE = (
+    "This rate comes from a fit to this race alone. The training and held-out "
+    "roles in list_races describe the pooled model behind compare_strategies, "
+    "not this rate, so a rate for the held-out race is still fitted to that "
+    "race's own laps and is not an out-of-sample result."
+)
+
 STRATEGY_CAVEAT = (
     "A difference in pace in clear air, positive meaning the second "
     "driver's strategy cost more time. It accounts for tyre wear, the "
@@ -182,9 +189,12 @@ def list_races(outputs: ModelOutputs) -> dict[str, Any]:
             for race in outputs.races
         ],
         "note": (
-            "Races marked 'training' were used to fit the pooled model. The "
-            "race marked 'held out' was never seen during fitting, which is "
-            "what makes the strategy comparison an out-of-sample result."
+            "Races marked 'training' were used to fit the pooled model, and the "
+            "race marked 'held out' was never seen during that fitting, which "
+            "is what makes compare_strategies an out-of-sample result. These "
+            "roles apply only to the pooled model. get_degradation and "
+            "compare_degradation report rates fitted to each race on its own, "
+            "so those are in-sample for every race including the held-out one."
         ),
     }
 
@@ -262,6 +272,7 @@ def _degradation_fields(
             f"{outputs.settings['resamples']} resamples of whole stints, not "
             "individual laps, because laps within a stint are not independent"
         ),
+        "fitted_on": PER_RACE_FIT_NOTE,
     }
 
 
@@ -671,6 +682,7 @@ def _difference(
         "how_to_read_this": CLEAR_NOTE if clear else UNCLEAR_NOTE,
         "same_race": same_race,
         "method": _method_note(same_race, outputs.settings["resamples"]),
+        "fitted_on": PER_RACE_FIT_NOTE,
     }
 
 

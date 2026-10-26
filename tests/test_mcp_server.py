@@ -276,3 +276,23 @@ def test_the_real_comparisons_agree_with_the_pooled_model() -> None:
     assert across["same_race"] is False
     assert "independent" in across["method"]
     assert across["difference_is_distinguishable_from_zero"] is False
+
+
+def test_a_rate_says_which_fit_it_came_from(outputs: ModelOutputs) -> None:
+    # Without this an agent reads the training and held-out roles from
+    # list_races and attaches them to these per-race rates, which would make a
+    # held-out race's rate look like an out-of-sample result. It is not.
+    for payload in (
+        get_degradation(outputs, "HARD", "2023"),
+        compare_degradation(outputs, "2023", "HARD", "2023", "HARD"),
+    ):
+        assert "fit to this race alone" in payload["fitted_on"]
+        assert "not an out-of-sample result" in payload["fitted_on"]
+
+
+def test_list_races_says_the_roles_apply_only_to_the_pooled_model(
+    outputs: ModelOutputs,
+) -> None:
+    note = list_races(outputs)["note"]
+    assert "apply only to the pooled model" in note
+    assert "in-sample for every race" in note
