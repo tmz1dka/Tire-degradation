@@ -48,7 +48,7 @@ from tyre_deg.strategy import measure_pit_loss
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 DEFAULT_OUTPUT = Path("data/model_outputs.json")
 PLACES = 6
 
@@ -209,7 +209,31 @@ def build_race(
         "drivers": sorted(str(d) for d in raw["Driver"].dropna().unique()),
         "fuel_s_per_lap": interval_to_dict(result.fuel),
         "compounds": [compound_entry(c, result, clean) for c in compounds],
+        "degradation_draws": degradation_draws(result),
         "stints": stint_rows(raw, clean, total_laps),
+    }
+
+
+def degradation_draws(result: BootstrapResult) -> dict[str, list[float]]:
+    """Return each compound's degradation rate from every resampled fit.
+
+    Stored as one list per compound rather than one entry per draw, which is a
+    third of the size and is how the server reads them. Position matters: the
+    nth entry of every compound comes from the same resample, so a comparison
+    between two compounds in this race keeps the correlation between them.
+
+    Args:
+        result: The fitted model for one race.
+
+    Returns:
+        Degradation rates by compound, one per resample.
+    """
+    return {
+        compound: [
+            round(draw.degradation_s_per_lap[compound], PLACES)
+            for draw in result.draws
+        ]
+        for compound in sorted(result.degradation)
     }
 
 

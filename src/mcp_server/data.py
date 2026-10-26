@@ -23,6 +23,12 @@ DEFAULT_OUTPUT_PATH = Path("data/model_outputs.json")
 
 # Said on every strategy comparison, because the number is easy to
 # overstate: it is pace in clear air, not a prediction of the result.
+CLEAR_NOTE = "The interval excludes zero, so the data does separate these two."
+UNCLEAR_NOTE = (
+    "The interval includes zero, so this data cannot tell the two apart. Say "
+    "that, rather than reporting the difference as real."
+)
+
 STRATEGY_CAVEAT = (
     "A difference in pace in clear air, positive meaning the second "
     "driver's strategy cost more time. It accounts for tyre wear, the "
@@ -31,7 +37,7 @@ STRATEGY_CAVEAT = (
     "driver stuck behind another car, which is what happened at the 2025 "
     "Hungarian Grand Prix."
 )
-SUPPORTED_SCHEMA = 1
+SUPPORTED_SCHEMA = 2
 
 
 class UnknownValue(ValueError):
@@ -203,6 +209,30 @@ def driver_stints(race: dict[str, Any], driver: str) -> list[dict[str, Any]]:
     return sorted(stints, key=lambda s: s["stint"])
 
 
+def _find_compound(entry: dict[str, Any], compound: str) -> dict[str, Any]:
+    """Return a compound's entry in a race.
+
+    Args:
+        entry: A race entry.
+        compound: Compound name, case insensitive.
+
+    Returns:
+        That compound's entry.
+
+    Raises:
+        UnknownValue: If the race has no such compound.
+    """
+    wanted = compound.strip().upper()
+    found = next((c for c in entry["compounds"] if c["compound"] == wanted), None)
+    if found is None:
+        raise _reject(
+            f"compound for {entry['race_id']}",
+            compound,
+            [c["compound"] for c in entry["compounds"]],
+        )
+    return found
+
+
 def _degradation_fields(
     found: dict[str, Any],
     outputs: ModelOutputs,
@@ -254,11 +284,8 @@ def get_degradation(
         UnknownValue: If the race or compound is not in the results.
     """
     entry = outputs.race(race)
-    wanted = compound.strip().upper()
-    available = [c["compound"] for c in entry["compounds"]]
-    found = next((c for c in entry["compounds"] if c["compound"] == wanted), None)
-    if found is None:
-        raise _reject(f"compound for {entry['race_id']}", compound, available)
+    found = _find_compound(entry, compound)
+    wanted = found["compound"]
     result: dict[str, Any] = {
         "race": entry["race_id"],
         "compound": wanted,
@@ -510,3 +537,171 @@ def _comparison_result(
         "model_fitted_on": outputs.pooled["fitted_on"],
         "what_this_is": STRATEGY_CAVEAT,
     }
+
+
+def _side(entry: dict[str, Any], compound: str) -> dict[str, Any]:
+    """Describe one side of a comparison, with its draws if it has an estimate.
+
+    Args:
+        entry: A race entry.
+        compound: Compound name.
+
+    Returns:
+        The race, the compound, its entry and its resampled rates.
+
+    Raises:
+        UnknownValue: If the race has no such compound.
+    """
+    found = _find_compound(entry, compound)
+    return {
+        "race": entry["race_id"],
+        "compound": found["compound"],
+        "entry": found,
+        "draws": entry.get("degradation_draws", {}).get(found["compound"]),
+    }
+
+
+def compare_degradation(
+    outputs: ModelOutputs,
+    race_a: str,
+    compound_a: str,
+    race_b: str,
+    compound_b: str,
+) -> dict[str, Any]:
+    """Compare two degradation rates, with an interval on the difference.
+
+    Comparing two rates by eye, by checking whether their intervals overlap, is
+    not a test of anything: intervals can overlap while the difference is
+    clearly real, and can sit apart when it is not. The difference is therefore
+    recomputed inside every resample and reported with its own interval.
+
+    Args:
+        outputs: The precomputed results.
+        race_a: Race for the first rate.
+        compound_a: Compound for the first rate.
+        race_b: Race for the second rate.
+        compound_b: Compound for the second rate.
+
+    Returns:
+        The difference with its interval, or why no comparison is possible.
+
+    Raises:
+        UnknownValue: If a race or compound is unknown.
+    """
+    first = _side(outputs.race(race_a), compound_a)
+    second = _side(outputs.race(race_b), compound_b)
+    missing = [s for s in (first, second) if not s["draws"]]
+    if missing:
+        return _no_comparison(first, second, missing)
+    return _difference(first, second, outputs)
+
+
+def _no_comparison(
+    first: dict[str, Any],
+    second: dict[str, Any],
+    missing: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Explain why two rates cannot be compared.
+
+    Args:
+        first: The first side of the comparison.
+        second: The second side.
+        missing: The sides that have no estimate.
+
+    Returns:
+        A result with no difference and the reason for each missing side.
+    """
+    return {
+        "comparison": _label(first, second),
+        "difference_s_per_lap": None,
+        "no_comparison_because": [
+            f"{s['race']} {s['compound'].lower()}: "
+            f"{s['entry'].get('no_estimate_because', 'no estimate available')}"
+            for s in missing
+        ],
+        "warning": (
+            "There is no number here and none can be made up. Do not substitute "
+            "a rate from another race or compound, and do not describe the "
+            "missing compound as degrading slowly: nothing is known about it."
+        ),
+    }
+
+
+def _label(first: dict[str, Any], second: dict[str, Any]) -> str:
+    """Name a comparison in the order it is reported, second minus first."""
+    return (
+        f"{second['race']} {second['compound'].lower()} minus "
+        f"{first['race']} {first['compound'].lower()}"
+    )
+
+
+def _difference(
+    first: dict[str, Any],
+    second: dict[str, Any],
+    outputs: ModelOutputs,
+) -> dict[str, Any]:
+    """Compute the difference between two rates and its interval.
+
+    Within one race both rates come from the same fit, so pairing the nth draw
+    of each keeps the correlation between them. Across races the fits are
+    independent, and pairing by position is one valid way of drawing from both.
+
+    Args:
+        first: The first side of the comparison.
+        second: The second side.
+        outputs: The precomputed results, for the settings.
+
+    Returns:
+        The difference with its interval and how to read it.
+    """
+    spread = [b - a for a, b in zip(first["draws"], second["draws"], strict=True)]
+    point = (
+        second["entry"]["degradation_s_per_lap"]["estimate"]
+        - first["entry"]["degradation_s_per_lap"]["estimate"]
+    )
+    low, high = percentile(spread, 0.025), percentile(spread, 0.975)
+    clear = not low <= 0.0 <= high
+    same_race = first["race"] == second["race"]
+    return {
+        "comparison": _label(first, second),
+        "rates_s_per_lap": _rates(first, second),
+        "difference_s_per_lap": round(point, 4),
+        "confidence_interval_95": [round(low, 4), round(high, 4)],
+        "difference_is_distinguishable_from_zero": clear,
+        "how_to_read_this": CLEAR_NOTE if clear else UNCLEAR_NOTE,
+        "same_race": same_race,
+        "method": _method_note(same_race, outputs.settings["resamples"]),
+    }
+
+
+def _rates(first: dict[str, Any], second: dict[str, Any]) -> dict[str, float]:
+    """Return each side's rate, keyed by race and compound."""
+    return {
+        f"{s['race']} {s['compound'].lower()}": round(
+            s["entry"]["degradation_s_per_lap"]["estimate"], 4
+        )
+        for s in (first, second)
+    }
+
+
+def _method_note(same_race: bool, resamples: int) -> str:
+    """Say how the difference was computed and what that handles.
+
+    Args:
+        same_race: Whether both rates came from the same fit.
+        resamples: How many resamples were used.
+
+    Returns:
+        A sentence for the payload.
+    """
+    shared = (
+        "Both rates come from the same fit, so their correlation is accounted "
+        "for."
+        if same_race
+        else "The two rates come from separate fits to different races, which "
+        "are independent."
+    )
+    return (
+        f"The difference was recomputed inside each of {resamples} resamples "
+        f"of whole stints. {shared}"
+    )

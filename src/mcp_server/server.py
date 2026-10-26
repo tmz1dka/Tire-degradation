@@ -164,5 +164,40 @@ def compare_strategies(
         raise ToolError(str(error)) from error
 
 
+@mcp.tool()
+def compare_degradation(
+    race_a: RaceArg,
+    compound_a: Annotated[
+        str, Field(description="Compound for the first rate: SOFT, MEDIUM or HARD.")
+    ],
+    race_b: RaceArg,
+    compound_b: Annotated[
+        str, Field(description="Compound for the second rate.")
+    ],
+) -> dict[str, Any]:
+    """Compare two degradation rates and get an interval on the difference.
+
+    Use this whenever the question is whether one tyre degraded faster than
+    another, whether that is two compounds in the same race or the same
+    compound in two different races. Do not answer such a question by comparing
+    two separate get_degradation results: overlapping intervals do not mean two
+    rates are the same, and separated ones do not prove they differ. Only the
+    difference, recomputed with its own interval, settles it.
+
+    Read difference_is_distinguishable_from_zero before saying anything. When
+    it is false, the honest answer is that this data cannot tell the two apart,
+    not that they are equal and not that the larger estimate is the real one.
+
+    When one side has too little data, difference_s_per_lap is null and
+    no_comparison_because says which side and why. Report that as it stands.
+    """
+    try:
+        return data.compare_degradation(
+            outputs(), race_a, compound_a, race_b, compound_b
+        )
+    except UnknownValue as error:
+        raise ToolError(str(error)) from error
+
+
 if __name__ == "__main__":
     mcp.run()

@@ -222,6 +222,7 @@ rather than being told about it. Four tools:
 | `get_degradation` | how fast a compound lost lap time in a race, with its interval |
 | `compare_stints` | two drivers' stints side by side |
 | `compare_strategies` | what two drivers' pit strategies were worth against each other |
+| `compare_degradation` | whether one tyre really degraded faster than another |
 
 Install the extra dependency and register it:
 
@@ -251,6 +252,13 @@ rebuild them after changing the analysis:
 > There is no estimate. The soft has 9 clean racing laps in that race against
 > the 40 needed to fit a rate, so it is not modelled. That is not a claim that
 > it degraded slowly: nothing is known about it.
+>
+> **Did the medium degrade faster in 2024 than in 2023?**
+>
+> The estimates differ, 0.0755 against 0.0564, but the difference is +0.0191
+> seconds per lap with an interval of -0.0125 to 0.0469. That includes zero, so
+> this data cannot tell the two races apart. Comparing the two intervals by eye
+> would not have settled it either way.
 >
 > **Was Piastri's two-stop quicker than Norris's one-stop in 2025?**
 >

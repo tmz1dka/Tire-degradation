@@ -18,6 +18,7 @@ from mcp_server.data import (
     DEFAULT_OUTPUT_PATH,
     ModelOutputs,
     UnknownValue,
+    compare_degradation,
     compare_stints,
     compare_strategies,
     get_degradation,
@@ -50,6 +51,7 @@ def build_race() -> dict[str, Any]:
                  "no_estimate_because": "only 5 clean racing laps"},
             ],
             "fuel_s_per_lap": {"estimate": 0.04, "low": 0.03, "high": 0.05},
+        "degradation_draws": {"HARD": [0.08, 0.10, 0.12]},
             "stints": [
                 {"driver": "AAA", "stint": 1, "compound": "HARD",
                  "laps": 10, "clean_laps": 9, "trend_s_per_lap": 0.1},
@@ -229,3 +231,48 @@ def test_the_committed_results_still_hold_the_published_numbers() -> None:
     assert held_out["difference_s"] == pytest.approx(-9.0, abs=0.05)
     assert held_out["confidence_interval_95"] == [pytest.approx(-13.3, abs=0.05),
                                                   pytest.approx(-4.77, abs=0.05)]
+
+
+def test_comparing_two_rates_reports_the_difference(outputs: ModelOutputs) -> None:
+    # The fixture has one compound with an estimate, so compare it with itself:
+    # the difference must be exactly zero and the interval must contain zero.
+    result = compare_degradation(outputs, "2023", "HARD", "2023", "HARD")
+    assert result["difference_s_per_lap"] == pytest.approx(0.0)
+    assert result["difference_is_distinguishable_from_zero"] is False
+    assert result["same_race"] is True
+    assert "cannot tell the two apart" in result["how_to_read_this"]
+
+
+def test_comparing_against_a_compound_with_no_estimate_is_refused(
+    outputs: ModelOutputs,
+) -> None:
+    result = compare_degradation(outputs, "2023", "HARD", "2023", "SOFT")
+    assert result["difference_s_per_lap"] is None
+    assert "only 5 clean racing laps" in result["no_comparison_because"][0]
+    assert "made up" in result["warning"]
+
+
+def test_comparing_an_unknown_compound_lists_the_real_ones(
+    outputs: ModelOutputs,
+) -> None:
+    with pytest.raises(UnknownValue, match="HARD, SOFT"):
+        compare_degradation(outputs, "2023", "HARD", "2023", "ultrasoft")
+
+
+@pytest.mark.skipif(
+    not DEFAULT_OUTPUT_PATH.exists(), reason="precomputed results not built"
+)
+def test_the_real_comparisons_agree_with_the_pooled_model() -> None:
+    real = ModelOutputs.from_file()
+    # Within 2023 the hard looks steeper than the medium, as the pooled model
+    # also found, and in both cases the difference includes zero.
+    same_race = compare_degradation(real, "2023", "MEDIUM", "2023", "HARD")
+    assert same_race["same_race"] is True
+    assert same_race["difference_is_distinguishable_from_zero"] is False
+    low, high = same_race["confidence_interval_95"]
+    assert low < 0 < high
+    # Across races the two fits are independent, which the method says.
+    across = compare_degradation(real, "2023", "MEDIUM", "2024", "MEDIUM")
+    assert across["same_race"] is False
+    assert "independent" in across["method"]
+    assert across["difference_is_distinguishable_from_zero"] is False

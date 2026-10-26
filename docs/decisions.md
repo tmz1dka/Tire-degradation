@@ -498,3 +498,47 @@ server is also a second thing to keep working: it adds seventeen packages to the
 environment, four of which are a web stack the stdio transport never uses.
 
 **Reproduce.** `python -m mcp_server.precompute`, then `pytest tests/test_mcp_server.py`.
+
+## 14. Comparing two degradation rates
+
+**Decision.** Add a tool that returns the difference between two degradation
+rates with its own confidence interval, and store each race's bootstrap fits so
+it can. It compares any two rates: two compounds in one race, or the same
+compound in two races.
+
+**Why.** Section 8 says that checking whether two intervals overlap is not a
+test of whether two coefficients differ, and section 7 applies that to the two
+compounds. The server could state that caution but could not act on it: a
+caller could fetch two rates and was left to eyeball them, which is exactly the
+mistake the rest of the project avoids.
+
+The numbers show why it matters. The medium comes out at 0.0564 s/lap in 2023
+and 0.0755 in 2024, which looks like a real change. The difference is
++0.0191 s/lap with an interval of -0.0125 to 0.0469, so it is not. Within 2023,
+hard minus medium is +0.0110 with an interval of -0.0090 to 0.0326, agreeing
+with the pooled fit in section 7.
+
+Which draws are paired matters. Two compounds in one race come from the same
+fit, so the nth draw of each must be used together to keep their correlation.
+Two races are separate fits and independent, so pairing by position is just one
+valid way of drawing from both. The tool says which case it is in its answer.
+
+**Not chosen.**
+- *Let the caller compare two separate results.* That is the error the tool
+  exists to prevent.
+- *Store only summary intervals per race.* Then no difference could be given an
+  interval, and the comparison would be a point estimate, which the project
+  treats as not a result.
+- *Compute differences in the precompute step for every pair.* Three races and
+  three compounds give far more pairs than anyone will ask for, and the file
+  would grow for no benefit. Carrying the draws covers every pair at a tenth of
+  the size.
+
+**Cost accepted.** The results file grew from 200 KB to 284 KB, because it now
+carries 1000 degradation draws per compound per race. Comparisons also remain
+within one circuit: nothing here compares a tyre at the Hungaroring with the
+same tyre anywhere else, and the compound names would not mean the same thing
+if it did.
+
+**Reproduce.** `python -m mcp_server.precompute`, then
+`pytest tests/test_mcp_server.py`.
